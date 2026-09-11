@@ -3,13 +3,15 @@ name: windows
 on:
   push:
     branches: [ main ]
-    paths: [ 'windows-app/**', '.github/workflows/windows.yml' ]
+    paths: [ 'windows-app/**', 'driver/**', '.github/workflows/windows.yml' ]
   pull_request:
   workflow_dispatch:
 
 jobs:
   app:
-    runs-on: windows-latest
+    # Фиксируем образ: windows-latest мигрировал на windows-2025 (VS 18).
+    # Пин на windows-2022 исключает дрейф окружения на время отладки сборки.
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
 
@@ -27,6 +29,24 @@ jobs:
           -c Release -r win-x64 --self-contained
           -p:Platform=x64 -p:WindowsAppSDKSelfContained=true
 
+      # XamlCompiler.exe при ошибке pass1 молча выходит с кодом 1 (MSB3073 без
+      # текста): детали он пишет в output.json, который MSBuild не показывает.
+      # Дампим ввод/вывод компилятора, чтобы реальные WMC-ошибки были видны в логе.
+      - name: Dump XAML compiler diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-ChildItem windows-app/src/PhoneMic.App/obj -Recurse -Filter output.json -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host "=== $($_.FullName) ==="
+            Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue
+          }
+          Get-ChildItem windows-app/src/PhoneMic.App/obj -Recurse -Filter input.json -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host "=== $($_.FullName) ==="
+            $json = Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
+            Write-Host ("ProjectName: " + $json.ProjectName)
+            Write-Host ("XamlFiles: " + ($json.XamlFiles -join ', '))
+          }
+
       - name: Zip app
         shell: pwsh
         run: |
@@ -40,28 +60,37 @@ jobs:
           path: artifacts/PhoneMic-win-x64.zip
 
   driver:
-    runs-on: windows-latest
+    # Фиксируем образ: windows-latest мигрировал на windows-2025 (VS 18), где
+    # winget-установка WDK 22621 не даёт рабочих km-хедеров (ntddk.h not found).
+    # windows-2022 = VS 2022: связка WDK 22621 + VSIX-интеграция проверенно работает.
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
 
-      # Экспериментальный джоб: сборка драйвера в CI требует WDK.
-      # Надёжнее собирать локально (см. docs/DRIVER_BUILD.md).
       - name: Install WDK (winget)
-        continue-on-error: true
         shell: pwsh
         run: |
           winget install --id Microsoft.WindowsWDK.10.0.22621 --silent --accept-package-agreements --accept-source-agreements
 
+      # Без continue-on-error: если winget тихо провалился, падаем сразу
+      # с внятным сообщением, а не с непонятным "ntddk.h: No such file".
+      - name: Verify WDK
+        shell: pwsh
+        run: |
+          $ntddk = "${env:ProgramFiles(x86)}\Windows Kits\10\Include\10.0.22621.0\km\ntddk.h"
+          if (-not (Test-Path $ntddk)) {
+            throw "WDK 10.0.22621.0 not found (missing: $ntddk). winget WDK install failed."
+          }
+          Write-Host "WDK 10.0.22621.0 OK"
+
       - name: Build driver (MSBuild)
-        continue-on-error: true
         shell: pwsh
         run: |
           $msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
             -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
-          & $msbuild driver/phonemic.vcxproj /p:Configuration=Release /p:Platform=x64 /t:Build
+          & $msbuild driver/phonemic.vcxproj /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=10.0.22621.0 /t:Build
 
       - name: Package driver (sys/inf/cat)
-        if: success() || failure()
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null

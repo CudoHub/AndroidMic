@@ -1,0 +1,74 @@
+<Page
+    x:Class="PhoneMic.App.Views.TransportPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer Padding="24" VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="16" MaxWidth="720" HorizontalAlignment="Left">
+            <TextBlock Text="Транспорт" FontSize="28" FontWeight="SemiBold"/>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Порты" FontWeight="SemiBold"/>
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBox Header="Control (TCP+TLS)" x:Name="CtlPortBox" Width="140" TextChanged="Port_TextChanged"/>
+                        <TextBox Header="Media (UDP/TCP)" x:Name="MediaPortBox" Width="140" TextChanged="Port_TextChanged"/>
+                        <Button Content="Применить и перезапустить" Click="ApplyPorts_Click" VerticalAlignment="Bottom"/>
+                    </StackPanel>
+                    <TextBlock Text="Медиа-режим выбирается автоматически: loopback (adb reverse) → TCP/TLS, иначе UDP. Можно принудительно задать ниже."
+                               TextWrapping="Wrap" Style="{ThemeResource CaptionTextBlockStyle}"/>
+                    <ComboBox x:Name="MediaModeBox" Header="Медиа-режим" Width="220" SelectedIndex="0" SelectionChanged="MediaMode_SelectionChanged">
+                        <ComboBoxItem Content="Авто"/>
+                        <ComboBoxItem Content="UDP (низкая задержка)"/>
+                        <ComboBoxItem Content="TCP/TLS (надёжно)"/>
+                    </ComboBox>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Wi-Fi Direct (ПК — Group Owner)" FontWeight="SemiBold"/>
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Button x:Name="WfdButton" Content="Включить публикацию" Click="Wfd_Click"/>
+                        <Button Content="Показать пароль" Click="WfdPass_Click"/>
+                    </StackPanel>
+                    <TextBlock x:Name="WfdStatusText" Text="Публикация выключена" TextWrapping="Wrap"/>
+                    <TextBlock Text="Телефон ищет группу с именем ПК (DIRECT-…) и подключается как P2P-клиент, затем сам выходит на control-порт."
+                               TextWrapping="Wrap" Style="{ThemeResource CaptionTextBlockStyle}"/>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="USB через ADB" FontWeight="SemiBold"/>
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Button Content="Настроить adb reverse" Click="AdbReverse_Click"/>
+                        <Button Content="Проверить устройство" Click="AdbCheck_Click"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBox Header="Путь к adb.exe" x:Name="AdbPathBox" Width="360"/>
+                        <Button Content="Сохранить" Click="AdbSave_Click" VerticalAlignment="Bottom"/>
+                    </StackPanel>
+                    <TextBlock x:Name="AdbStatus" Text="" TextWrapping="Wrap"/>
+                    <TextBlock Text="Требуется USB-отладка на телефоне. Альтернатива без adb — включить на телефоне «USB-модем» (tethering)."
+                               TextWrapping="Wrap" Style="{ThemeResource CaptionTextBlockStyle}"/>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Брандмауэр" FontWeight="SemiBold"/>
+                    <Button Content="Добавить правила для портов PhoneMic" Click="Firewall_Click"/>
+                    <TextBlock x:Name="FwStatus" Text="" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

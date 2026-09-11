@@ -1,0 +1,83 @@
+name: windows
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'windows-app/**', '.github/workflows/windows.yml' ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  app:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Test Core
+        run: dotnet test windows-app/tests/PhoneMic.Core.Tests/PhoneMic.Core.Tests.csproj -c Release
+
+      - name: Publish WinUI 3 (unpackaged, self-contained)
+        run: >
+          dotnet publish windows-app/src/PhoneMic.App/PhoneMic.App.csproj
+          -c Release -r win-x64 --self-contained
+          -p:Platform=x64 -p:WindowsAppSDKSelfContained=true
+
+      - name: Zip app
+        shell: pwsh
+        run: |
+          $src = "windows-app/src/PhoneMic.App/bin/Release/net8.0-windows10.0.22621.0/win-x64/publish"
+          Compress-Archive -Path "$src/*" -DestinationPath artifacts/PhoneMic-win-x64.zip -Force
+
+      - name: Upload app
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhoneMic-windows-app
+          path: artifacts/PhoneMic-win-x64.zip
+
+  driver:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Экспериментальный джоб: сборка драйвера в CI требует WDK.
+      # Надёжнее собирать локально (см. docs/DRIVER_BUILD.md).
+      - name: Install WDK (winget)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          winget install --id Microsoft.WindowsWDK.10.0.22621 --silent --accept-package-agreements --accept-source-agreements
+
+      - name: Build driver (MSBuild)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
+            -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
+          & $msbuild driver/phonemic.vcxproj /p:Configuration=Release /p:Platform=x64 /t:Build
+
+      - name: Package driver (sys/inf/cat)
+        if: success() || failure()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          $out = "driver/x64/Release/phonemic"
+          if (Test-Path $out) {
+            Copy-Item "$out/phonemic.sys","$out/phonemic.inf","$out/phonemic.cat" artifacts -Force -ErrorAction SilentlyContinue
+            Copy-Item scripts/install_driver.ps1 artifacts -Force
+            Copy-Item scripts/uninstall_driver.ps1 artifacts -Force
+            Compress-Archive -Path "artifacts/*" -DestinationPath artifacts/PhoneMic-driver.zip -Force
+          } else {
+            Write-Host "Драйвер не собран в CI — соберите локально по docs/DRIVER_BUILD.md"
+          }
+
+      - name: Upload driver
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhoneMic-windows-driver
+          path: artifacts/PhoneMic-driver.zip
+          if-no-files-found: ignore

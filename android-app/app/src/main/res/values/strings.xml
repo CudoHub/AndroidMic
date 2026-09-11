@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PhoneMic</string>
+    <string name="notif_channel">Поток микрофона</string>
+    <string name="notif_title">PhoneMic работает</string>
+    <string name="notif_connected">Передаётся на %1$s</string>
+    <string name="notif_waiting">Ожидание подключения…</string>
+    <string name="notif_action_mute">Мьют</string>
+    <string name="notif_action_unmute">Включить звук</string>
+    <string name="notif_action_stop">Стоп</string>
+
+    <string name="tab_home">Главная</string>
+    <string name="tab_settings">Настройки</string>
+
+    <string name="status_idle">Остановлено</string>
+    <string name="status_connecting">Подключение…</string>
+    <string name="status_auth">Авторизация…</string>
+    <string name="status_streaming">В эфире</string>
+    <string name="status_waiting_bt">Ожидание ПК (Bluetooth)…</string>
+    <string name="status_error">Ошибка</string>
+
+    <string name="transport_wifi">Wi-Fi</string>
+    <string name="transport_usb">USB</string>
+    <string name="transport_wfd">Wi-Fi Direct</string>
+    <string name="transport_bt">Bluetooth</string>
+
+    <string name="btn_start">Включить микрофон</string>
+    <string name="btn_stop">Выключить</string>
+    <string name="btn_mute">Мьют</string>
+    <string name="btn_unmute">Включить звук</string>
+    <string name="btn_discover">Искать ПК</string>
+    <string name="btn_connect_manual">Подключить</string>
+    <string name="btn_confirm_pin">Подтвердить</string>
+    <string name="btn_reject_pin">Отклонить</string>
+
+    <string name="volume">Громкость</string>
+    <string name="host">Адрес ПК</string>
+    <string name="port">Порт</string>
+    <string name="token">Токен доступа</string>
+    <string name="discovered_pcs">Найденные ПК</string>
+    <string name="manual_connect">Ручное подключение</string>
+
+    <string name="pin_dialog_title">Подтверждение ПК</string>
+    <string name="pin_dialog_text">Отпечаток сертификата ПК:\n%1$s\n\nУбедитесь, что он совпадает с показанным в приложении PhoneMic на компьютере (страница «Безопасность»).</string>
+
+    <string name="s_codec">Кодек</string>
+    <string name="s_frame">Длительность кадра</string>
+    <string name="s_bitrate">Битрейт Opus</string>
+    <string name="s_aec">Эхоподавление (AEC)</string>
+    <string name="s_agc">Автоусиление (AGC)</string>
+    <string name="s_ns">Шумоподавление (NS)</string>
+    <string name="s_media_mode">Медиа-канал</string>
+    <string name="s_keep_screen">Держать экран включённым</string>
+    <string name="s_auto_restart">Автоперезапуск при разрыве</string>
+    <string name="s_reset_pin">Сбросить отпечаток ПК</string>
+    <string name="s_about">О приложении</string>
+    <string name="mode_auto">Авто</string>
+    <string name="mode_udp">UDP (низкая задержка)</string>
+    <string name="mode_tcp">TCP/TLS (надёжно)</string>
+
+    <string name="err_no_permission">Нужно разрешение на микрофон</string>
+    <string name="err_no_host">Укажите адрес ПК</string>
+    <string name="err_no_token">Укажите токен из приложения ПК</string>
+    <string name="err_tls_pin">Отпечаток сертификата ПК изменился! Подключение прервано. Сбросьте отпечаток в настройках, только если вы сами переустановили сервер.</string>
+    <string name="err_auth">Неверный токен</string>
+    <string name="err_busy">ПК занят другой сессией</string>
+    <string name="err_net">Сеть недоступна: %1$s</string>
+    <string name="err_wfd">Wi-Fi Direct: %1$s</string>
+    <string name="err_bt">Bluetooth: %1$s</string>
+    <string name="err_mic">Ошибка микрофона: %1$s</string>
+    <string name="err_encoder">Ошибка кодировщика, переход на PCM</string>
+</resources>

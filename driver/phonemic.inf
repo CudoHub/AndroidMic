@@ -1,0 +1,83 @@
+;/*++ BUILD Version: 0001
+; PhoneMic Virtual Microphone — INF для корневого устройства Root\PhoneMic
+;--*/
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = MEDIA
+ClassGuid   = {4d36e96c-e325-11ce-bfc1-08002be10318}
+Provider    = %ProviderName%
+CatalogFile = phonemic.cat
+DriverVer   = 09/11/2026,1.0.0.0
+PnpLockdown = 1
+
+[DestinationDirs]
+PhonemicDriverFiles = 12 ; system32\drivers
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+phonemic.sys = 1,,,
+
+[Manufacturer]
+%ProviderName% = Phonemic,NT$ARCH$
+
+[Phonemic.NT$ARCH$]
+%*PHONEMIC.DeviceDesc% = Phonemic_Install, Root\PhoneMic
+
+; ------------------------------ install -------------------------------------
+
+[Phonemic_Install]
+CopyFiles = PhonemicDriverFiles
+AddReg    = PhonemicAddReg
+
+[Phonemic_Install.HW]
+
+[Phonemic_Install.Interfaces]
+AddInterface = %KSCATEGORY_AUDIO%,     %KSNAME_Wave%,     Phonemic.Interface.Wave
+AddInterface = %KSCATEGORY_CAPTURE%,   %KSNAME_Wave%,     Phonemic.Interface.Wave
+AddInterface = %KSCATEGORY_TOPOLOGY%,  %KSNAME_Topology%, Phonemic.Interface.Topology
+
+[Phonemic.Interface.Wave]
+AddReg = Phonemic.Interface.Wave.AddReg
+
+[Phonemic.Interface.Wave.AddReg]
+HKR,,FriendlyName,,%Wave.FriendlyName%
+HKR,,CLSID,,%Proxy.CLSID%
+
+
+[Phonemic.Interface.Topology]
+AddReg = Phonemic.Interface.Topo.AddReg
+
+[Phonemic.Interface.Topo.AddReg]
+HKR,,FriendlyName,,%Topo.FriendlyName%
+
+[PhonemicAddReg]
+HKR,,AssociatedFilters,0x00010001,0x3
+HKR,,Driver,,phonemic.sys
+
+[Phonemic_Install.Services]
+AddService = phonemic, 0x00000002, phonemic_Service
+
+[phonemic_Service]
+DisplayName    = %*PHONEMIC.DeviceDesc%
+ServiceType    = 1                  ; SERVICE_KERNEL_DRIVER
+StartType      = 3                  ; DEMAND_START
+ErrorControl   = 1                  ; NORMAL
+ServiceBinary  = %12%\phonemic.sys
+
+[PhonemicDriverFiles]
+phonemic.sys
+
+[Strings]
+ProviderName         = "PhoneMic Project"
+DiskName             = "PhoneMic Installation Disk"
+*PHONEMIC.DeviceDesc = "PhoneMic Virtual Microphone"
+Wave.FriendlyName    = "PhoneMic Virtual Microphone"
+Topo.FriendlyName    = "PhoneMic Virtual Microphone Topology"
+KSNAME_Wave          = "Wave"
+KSNAME_Topology      = "Topology"
+KSCATEGORY_AUDIO     = "{6994AD04-93EF-11D0-A3CC-00A0C9223196}"
+KSCATEGORY_CAPTURE   = "{65E8773D-8F56-11D0-A3B9-00A0C9223196}"
+KSCATEGORY_TOPOLOGY  = "{DDA54A40-BE7F-11D1-AB79-00A0C9223196}"
+Proxy.CLSID          = "{17CCA71B-ECD7-11D0-B908-00A0C9223196}"

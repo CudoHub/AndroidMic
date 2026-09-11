@@ -1,0 +1,52 @@
+<Page
+    x:Class="PhoneMic.App.Views.ConnectPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer Padding="24" VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="16" MaxWidth="720" HorizontalAlignment="Left">
+            <TextBlock Text="Подключение" FontSize="28" FontWeight="SemiBold"/>
+            <InfoBar x:Name="StatusInfo" IsOpen="True" Severity="Informational"
+                     Title="Телефон подключается сам"
+                     Message="Откройте приложение PhoneMic на телефоне, выберите транспорт и включите микрофон. Появление телефона здесь — автоматическое."/>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Сервер управления" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="ServerStatus" Text="—"/>
+                    <TextBlock x:Name="ClientInfo" Text="Клиент: —"/>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Bluetooth" FontWeight="SemiBold"/>
+                    <TextBlock Text="Сопрягите телефон с ПК, затем нажмите «Обновить» и выберите устройство. На телефоне должен быть включён режим Bluetooth."
+                               TextWrapping="Wrap"/>
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Button Content="Обновить список" Click="RefreshBt_Click"/>
+                        <Button Content="Подключиться" Click="ConnectBt_Click"/>
+                    </StackPanel>
+                    <ListView x:Name="BtList" Height="150" SelectionMode="Single"/>
+                    <TextBlock x:Name="BtStatus" Text="" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Обнаружение в сети" FontWeight="SemiBold"/>
+                    <ToggleSwitch x:Name="DiscoveryToggle" Toggled="Discovery_Toggled"
+                                  OnContent="Телефон видит этот ПК в списке поиска"
+                                  OffContent="Обнаружение выключено"/>
+                    <TextBlock Text="Порт обнаружения: 47820/UDP (широковещательные запросы телефона)."
+                               Style="{ThemeResource CaptionTextBlockStyle}"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

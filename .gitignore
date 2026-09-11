@@ -1,0 +1,38 @@
+# Windows / VS
+.vs/
+bin/
+obj/
+x64/
+*.user
+*.aps
+*.log
+*.pdb
+*.sys
+*.cat
+*.cer
+*.pfx
+packages/
+artifacts/
+AppPackages/
+BundleArtifacts/
+
+# Android
+*.iml
+.gradle/
+local.properties
+.idea/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# Common
+node_modules/
+dist/
+out/
+.DS_Store
+Thumbs.db

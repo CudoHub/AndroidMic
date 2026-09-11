@@ -1,0 +1,65 @@
+<Page
+    x:Class="PhoneMic.App.Views.AudioPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer Padding="24" VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="16" MaxWidth="720" HorizontalAlignment="Left">
+            <TextBlock Text="Аудио" FontSize="28" FontWeight="SemiBold"/>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Кодек и битрейт" FontWeight="SemiBold"/>
+                    <ComboBox x:Name="CodecBox" Header="Кодек" Width="260" SelectedIndex="0" SelectionChanged="Changed">
+                        <ComboBoxItem Content="Opus (сжатие, универсально)"/>
+                        <ComboBoxItem Content="PCM 16-bit (lossless, для быстрых сетей)"/>
+                    </ComboBox>
+                    <ComboBox x:Name="FrameBox" Header="Длительность кадра Opus" Width="260" SelectedIndex="1" SelectionChanged="Changed">
+                        <ComboBoxItem Content="10 мс (меньше задержка)"/>
+                        <ComboBoxItem Content="20 мс (надёжно)"/>
+                    </ComboBox>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="Битрейт Opus:" VerticalAlignment="Center"/>
+                        <ComboBox x:Name="BitrateBox" SelectedIndex="2" SelectionChanged="Changed" Width="140">
+                            <ComboBoxItem Content="24 kbps"/>
+                            <ComboBoxItem Content="32 kbps"/>
+                            <ComboBoxItem Content="48 kbps"/>
+                            <ComboBoxItem Content="64 kbps"/>
+                            <ComboBoxItem Content="96 kbps"/>
+                            <ComboBoxItem Content="128 kbps"/>
+                        </ComboBox>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Джиттер-буфер (задержка/стабильность)" FontWeight="SemiBold"/>
+                    <RadioButtons x:Name="JitterBox" SelectionChanged="Changed">
+                        <RadioButton Content="Ультра: цель 30 мс (суммарно ~35–50 мс)"/>
+                        <RadioButton Content="Баланс: цель 40 мс (рекомендуется)"/>
+                        <RadioButton Content="Стабильный: цель 80 мс (плохие сети)"/>
+                    </RadioButtons>
+                    <TextBlock Text="При потерях цель автоматически растёт, при стабильной сети — снижается."
+                               Style="{ThemeResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Проверка тракта" FontWeight="SemiBold"/>
+                    <ToggleSwitch x:Name="TestSineToggle" Toggled="TestSine_Toggled"
+                                  OnContent="Тестовый сигнал 440 Гц идёт в микрофон"
+                                  OffContent="Тестовый сигнал выключен"/>
+                    <TextBlock Text="Включите тестовый сигнал и выберите «PhoneMic Virtual Microphone» в Zoom/Discord/OBS — полоса должна двигаться. Затем выключите."
+                               TextWrapping="Wrap" Style="{ThemeResource CaptionTextBlockStyle}"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

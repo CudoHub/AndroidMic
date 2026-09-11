@@ -1,0 +1,19 @@
+<Page
+    x:Class="PhoneMic.App.Views.LogsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Padding="24" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12">
+            <TextBlock Text="Журнал" FontSize="28" FontWeight="SemiBold"/>
+            <Button Content="Открыть папку логов" Click="OpenLogs_Click" VerticalAlignment="Bottom"/>
+        </StackPanel>
+        <Border Grid.Row="1" Background="#141414" CornerRadius="8" Padding="8">
+            <ListView x:Name="LogList" ItemsSource="{x:Bind Vm.LogLines, Mode=OneWay}"
+                      FontFamily="Consolas" FontSize="12" SelectionMode="None"/>
+        </Border>
+    </Grid>
+</Page>

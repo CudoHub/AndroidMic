@@ -1,0 +1,49 @@
+<Page
+    x:Class="PhoneMic.App.Views.SecurityPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer Padding="24" VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="16" MaxWidth="720" HorizontalAlignment="Left">
+            <TextBlock Text="Безопасность" FontSize="28" FontWeight="SemiBold"/>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Токен доступа" FontWeight="SemiBold"/>
+                    <TextBlock Text="Введите этот токен в приложении на телефоне. Токен — единственный секрет авторизации: без него подключение отклоняется (HMAC-челлендж)."
+                               TextWrapping="Wrap" Style="{ThemeResource CaptionTextBlockStyle}"/>
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Button Content="Показать" Click="Show_Click"/>
+                        <Button Content="Скрыть" Click="Hide_Click"/>
+                        <Button Content="Сгенерировать заново" Click="Regen_Click"/>
+                    </StackPanel>
+                    <TextBlock x:Name="TokenBox" Text="••••••••••••••••••••••••" IsTextSelectionEnabled="True"
+                               FontFamily="Consolas" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Отпечаток TLS-сертификата (SHA-256)" FontWeight="SemiBold"/>
+                    <TextBlock Text="Телефон показывает этот отпечаток при первом подключении — сверьте его и подтвердите (TOFU-пиннинг)."
+                               TextWrapping="Wrap" Style="{ThemeResource CaptionTextBlockStyle}"/>
+                    <TextBlock x:Name="FpBox" Text="—" IsTextSelectionEnabled="True" FontFamily="Consolas" TextWrapping="Wrap"/>
+                    <Button Content="Скопировать" Click="CopyFp_Click"/>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Шифрование" FontWeight="SemiBold"/>
+                    <TextBlock TextWrapping="Wrap"
+                               Text="• Control-канал: TLS 1.2/1.3, сервер — самоподписанный сертификат RSA-3072, клиент пиннит SHA-256 отпечаток.&#x0a;• Медиа: AES-256-GCM, ключи HKDF-SHA256 от токена и session salt, счётчик-нонс + replay-защита.&#x0a;• Bluetooth: RFCOMM (шифрование уровня Bluetooth) + AES-GCM для control после handshake.&#x0a;• Токен хранится в %LOCALAPPDATA%\PhoneMic\settings.json (профиль пользователя) и никогда не пишется в лог."/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

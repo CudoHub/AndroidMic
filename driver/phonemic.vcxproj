@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{B2000001-0000-0000-0000-000000000001}</ProjectGuid>
+    <TemplateGuid>{dd38f7fc-d7bd-493b-a0f1-0e3654dff698}</TemplateGuid>
+    <RootNamespace>phonemic</RootNamespace>
+    <ProjectName>phonemic</ProjectName>
+    <DriverType>WDM</DriverType>
+    <WindowsTargetPlatformVersion>$(LatestTargetPlatformVersion)</WindowsTargetPlatformVersion>
+    <Configuration>Release</Configuration>
+    <Platform Condition="'$(Platform)' == ''">x64</Platform>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <Driver_SpectreMitigation>false</Driver_SpectreMitigation>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <Driver_SpectreMitigation>false</Driver_SpectreMitigation>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <PropertyGroup>
+    <InfFile>phonemic.inf</InfFile>
+    <EnableInf2cat>true</EnableInf2cat>
+    <Inf2CatWindowsVersionList>10_X64</Inf2CatWindowsVersionList>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <WarningLevel>Level3</WarningLevel>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)inc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>%(AdditionalDependencies);portcls.lib;stdunk.lib;wdmsec.lib;ksguid.lib</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <ClCompile Include="src\adapter.cpp" />
+    <ClCompile Include="src\control.cpp" />
+    <ClCompile Include="src\minwavert.cpp" />
+    <ClCompile Include="src\minwavertprops.cpp" />
+    <ClCompile Include="src\minwavertstream.cpp" />
+    <ClCompile Include="src\mintopo.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="inc\phonemic_ioctl.h" />
+    <ClInclude Include="src\common.h" />
+    <ClInclude Include="src\adapter.h" />
+    <ClInclude Include="src\control.h" />
+    <ClInclude Include="src\minwavert.h" />
+    <ClInclude Include="src\minwavertstream.h" />
+    <ClInclude Include="src\mintopo.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Inf Include="phonemic.inf" />
+    <ResourceCompile Include="phonemic.rc" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

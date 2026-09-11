@@ -40,9 +40,11 @@ static NTSTATUS InstallSubdevice(
     PUNKNOWN unknownPort = NULL;
     PUNKNOWN unknownMiniport = NULL;
     IPort* port = NULL;
+    PPORT newPort = NULL;   // PcNewPort возвращает PPORT (IPort*), а не PUNKNOWN
 
-    ntStatus = PcNewPort(&unknownPort, PortClassId);
+    ntStatus = PcNewPort(&newPort, PortClassId);
     if (!NT_SUCCESS(ntStatus)) goto Done;
+    unknownPort = (PUNKNOWN)newPort;
 
     ntStatus = MiniportCreate(&unknownMiniport, GUID_NULL, NonPagedPoolNx, NULL);
     if (!NT_SUCCESS(ntStatus)) goto Done;

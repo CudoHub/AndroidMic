@@ -27,12 +27,12 @@ public:
     // IMiniportWaveRTStream: SetFormat, SetState, GetPosition,
     // AllocateAudioBuffer, FreeAudioBuffer, GetHWLatency,
     // GetPositionRegister, GetClockRegister
-    IMP_IMiniportWaveRTStream
+    IMP_IMiniportWaveRTStream;   // макрос НЕ завершается ';' — точка с запятой обязательна
 
     // IMiniportWaveRTStreamNotification: AllocateBufferWithNotification,
     // FreeBufferWithNotification, RegisterNotificationEvent,
     // UnregisterNotificationEvent
-    IMP_IMiniportWaveRTStreamNotification
+    IMP_IMiniportWaveRTStreamNotification;   // тоже без ';' в конце
 
     // локальные методы
     NTSTATUS Init(_In_ CMiniportWaveRT* parent, _In_ PPORTWAVERTSTREAM portStream, _In_ BOOLEAN capture);

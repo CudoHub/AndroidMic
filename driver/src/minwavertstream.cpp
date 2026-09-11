@@ -297,16 +297,17 @@ CMiniportWaveRTStream::FreeAudioBuffer(
     FreeWaveRtBuffer();
 }
 
-STDMETHODIMP_(NTSTATUS)
+// IMiniportWaveRTStream::GetHWLatency возвращает VOID (portcls.h 26100,
+// STDMETHODIMP_(VOID)), а не NTSTATUS
+STDMETHODIMP_(VOID)
 CMiniportWaveRTStream::GetHWLatency(_Out_ KSRTAUDIO_HWLATENCY* hwLatency)
 {
     PAGED_CODE();
     ASSERT(hwLatency);
-    if (!hwLatency) return STATUS_INVALID_PARAMETER;
+    if (!hwLatency) return;
     hwLatency->FifoSize = 0;
     hwLatency->ChipsetDelay = 0;
     hwLatency->CodecDelay = 0;
-    return STATUS_SUCCESS;
 }
 
 STDMETHODIMP_(NTSTATUS)

@@ -7,11 +7,11 @@ PhoneMic driver: общие определения.
 // определения, и каждый .obj получит свои копии GUID (LNK2005). Единственное
 // ТУ с определениями — src/guids.cpp.
 #include <ntddk.h>
+#include <wdmsec.h>     // IoCreateDeviceSecure (control-устройство)
+#include <ks.h>         // KS-типы: каноничный порядок — ks.h/ksmedia.h ДО portcls.h
+#include <ksmedia.h>
 #include <portcls.h>
 #include <stdunk.h>     // CUnknown, DECLARE_STD_UNKNOWN, операторы new/delete
-#include <ks.h>
-#include <ksmedia.h>
-#include <wdm.h>
 #include "phonemic_ioctl.h"
 
 // ============================ pool tags ====================================

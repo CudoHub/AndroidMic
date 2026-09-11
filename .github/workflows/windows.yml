@@ -20,14 +20,8 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # ВАЖНО: global.json в корне репозитория пинует SDK на 8.0.4xx.
-      # Без него `dotnet publish` берёт САМЫЙ НОВЫЙ предустановленный SDK
-      # (на windows-2022 это 9.0.317/10.0.400), где MSBuild 17.12+ не может
-      # инстанцировать XamlCompiler: fallback в out-of-proc taskhost →
-      # MSB4061 "Type must be a type provided by the runtime" +
-      # MSB4027 "MetadataLoadContext ... has been disposed" — известная
-      # регрессия новых MSBuild. На MSBuild 17.11 (.NET 8 SDK) in-proc
-      # загрузка net6.0-задачи работает штатно.
+      # global.json пинует SDK на 8.0.4xx — нужен для dotnet test (Core) и для
+      # резолва SDK-style проекта под msbuild.exe (см. шаг Publish).
       - name: Show resolved SDK
         shell: pwsh
         run: dotnet --version
@@ -35,49 +29,49 @@ jobs:
       - name: Test Core
         run: dotnet test windows-app/tests/PhoneMic.Core.Tests/PhoneMic.Core.Tests.csproj -c Release
 
-      - name: Restore App
-        run: dotnet restore windows-app/src/PhoneMic.App/PhoneMic.App.csproj
-
-      # Microsoft.UI.Xaml.Markup.Compiler.dll (tools/net6.0 в пакете WASDK) ссылается
-      # на System.Security.Permissions 6.0.0, которой в пакете НЕТ — in-proc загрузка
-      # задачи CompileXaml падает с MSB4062 (упаковочный баг WASDK). Подкладываем DLL
-      # рядом с задачей: источник — глобальный кэш NuGet (гарантирован PackageReference
-      # в csproj), фолбэк — nupkg с api.nuget.org.
-      - name: Patch WASDK XamlCompiler dependencies
+      # Publish через Full-Framework MSBuild (msbuild.exe из VS), а НЕ dotnet CLI.
+      #
+      # Причина — XAML-компилятор WASDK 1.6 в in-proc варианте существует в двух
+      # видах:
+      #   * tools/net472 — Full CLR, самодостаточная папка (это путь VS);
+      #   * tools/net6.0 — только для dotnet CLI (interop.targets ставит
+      #     UseXamlCompilerExecutable=true на Core), НО эта сборка сломана на
+      #     CoreCLR: она зовёт RuntimeEnvironment.GetRuntimeInterfaceAsObject
+      #     (CLR COM IMetaDataDispenser для чтения winmd), который на .NET
+      #     Core/5+ всегда бросает PlatformNotSupportedException → WMC9999
+      #     "Operation is not supported on this platform" (доказано локально на
+      #     Linux и подтверждено CI-прогоном 5; прогоны 1-3 упирались ещё и в
+      #     молчаливый exit 1 exe-режима, а interop.targets прямо запрещает
+      #     exe-режим вне Core).
+      #   Полноценный путь — Full-MSBuild: in-proc net472-задача (дефолт при
+      #   MSBuildRuntimeType=Full, свойство НЕ переопределяем), все зависимости
+      #   компилятора лежат в tools/net472 пакета, патчи не нужны.
+      - name: Publish WinUI 3 (unpackaged, self-contained, Full-MSBuild)
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $wasdkRoot = "$env:USERPROFILE\.nuget\packages\microsoft.windowsappsdk"
-          $ver = (Get-ChildItem $wasdkRoot -Directory |
-                  Sort-Object -Property { [version]$_.Name } -Descending |
-                  Select-Object -First 1).Name
-          $dst = Join-Path $wasdkRoot "$ver\tools\net6.0"
-          if (-not (Test-Path $dst)) { throw "WASDK tools folder not found: $dst" }
-          $dll = "System.Security.Permissions.dll"
-          if (Test-Path (Join-Path $dst $dll)) { Write-Host "Already patched"; exit 0 }
-          $src = "$env:USERPROFILE\.nuget\packages\system.security.permissions\6.0.0\lib\net6.0\$dll"
-          if (-not (Test-Path $src)) {
-            Write-Host "Not in cache — downloading nupkg from nuget.org"
-            $zip = Join-Path $env:RUNNER_TEMP "ssp.zip"
-            Invoke-WebRequest -Uri 'https://api.nuget.org/v3-flatcontainer/system.security.permissions/6.0.0/system.security.permissions.6.0.0.nupkg' -OutFile $zip
-            $ext = Join-Path $env:RUNNER_TEMP "ssp"
-            Expand-Archive -Path $zip -DestinationPath $ext -Force
-            $src = Join-Path $ext "lib\net6.0\$dll"
-          }
-          Copy-Item $src $dst -Force
-          $copied = Get-Item (Join-Path $dst $dll)
-          Write-Host "Patched: $($copied.FullName) ($($copied.Length) bytes)"
+          $msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
+            -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
+          if (-not $msbuild) { throw "MSBuild.exe not found via vswhere" }
+          Write-Host "MSBuild: $msbuild"
+          & $msbuild windows-app/src/PhoneMic.App/PhoneMic.App.csproj `
+            -restore -t:Publish `
+            -p:Configuration=Release `
+            -p:Platform=x64 `
+            -p:RuntimeIdentifier=win-x64 `
+            -p:SelfContained=true `
+            -p:WindowsAppSDKSelfContained=true `
+            -nologo -v:m `
+            -bl:"$env:GITHUB_WORKSPACE\app-publish.binlog"
 
-      # UseXamlCompilerExecutable=false: XAML-компилятор запускается in-proc (net6.0),
-      # а не как отдельный процесс. В exe-режиме при ошибке он молча выходит с кодом 1
-      # (MSB3073 без текста), т.к. Exec гасит OutputDeserializer; in-proc печатает
-      # реальные WMC-ошибки прямо в лог MSBuild.
-      - name: Publish WinUI 3 (unpackaged, self-contained)
-        run: >
-          dotnet publish windows-app/src/PhoneMic.App/PhoneMic.App.csproj
-          -c Release -r win-x64 --self-contained
-          -p:Platform=x64 -p:WindowsAppSDKSelfContained=true
-          -p:UseXamlCompilerExecutable=false
+      # Полный двоичный лог при падении — если сборка снова упадёт, в артефакте
+      # будет точная картина (какая задача/таргет и почему).
+      - name: Upload publish binlog (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-publish-binlog
+          path: app-publish.binlog
+          if-no-files-found: ignore
 
       # На случай отката на exe-режим: дампим ввод/вывод компилятора.
       - name: Dump XAML compiler diagnostics
@@ -96,8 +90,14 @@ jobs:
       - name: Zip app
         shell: pwsh
         run: |
-          $src = "windows-app/src/PhoneMic.App/bin/Release/net8.0-windows10.0.22621.0/win-x64/publish"
-          Compress-Archive -Path "$src/*" -DestinationPath artifacts/PhoneMic-win-x64.zip -Force
+          # Путь publish зависит от Platform/RID — ищем фактическую папку с
+          # PhoneMic.App.exe вместо хардкода (bin/x64/Release/net8.0-windows10.0.22621.0/win-x64/publish).
+          $pub = Get-ChildItem windows-app/src/PhoneMic.App/bin -Recurse -Directory -Filter publish -ErrorAction SilentlyContinue |
+                  Where-Object { Test-Path (Join-Path $_.FullName 'PhoneMic.App.exe') } |
+                  Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $pub) { throw "Publish output with PhoneMic.App.exe not found under windows-app/src/PhoneMic.App/bin" }
+          Write-Host "Publish dir: $($pub.FullName)"
+          Compress-Archive -Path "$($pub.FullName)/*" -DestinationPath artifacts/PhoneMic-win-x64.zip -Force
 
       - name: Upload app
         uses: actions/upload-artifact@v4

@@ -273,7 +273,8 @@ NTSTATUS CMiniportTopology::PropertyHandlerTopo(PPCPROPERTY_REQUEST req)
     }
 
     // jack description
-    if (req->PropertyItem->Set == KSPROPSETID_Jack &&
+    // PropertyItem->Set — const GUID*, сравнивать через IsEqualGUIDAligned
+    if (IsEqualGUIDAligned(*req->PropertyItem->Set, KSPROPSETID_Jack) &&
         req->PropertyItem->Id == KSPROPERTY_JACK_DESCRIPTION)
     {
         if (!(req->Verb & KSPROPERTY_TYPE_GET)) return STATUS_NOT_SUPPORTED;
@@ -294,7 +295,7 @@ NTSTATUS CMiniportTopology::PropertyHandlerTopo(PPCPROPERTY_REQUEST req)
     }
 
     // volume level (per channel, mono)
-    if (req->PropertyItem->Set == KSPROPSETID_Audio &&
+    if (IsEqualGUIDAligned(*req->PropertyItem->Set, KSPROPSETID_Audio) &&
         req->PropertyItem->Id == KSPROPERTY_AUDIO_VOLUMELEVEL)
     {
         if (req->Verb & KSPROPERTY_TYPE_GET)
@@ -313,7 +314,7 @@ NTSTATUS CMiniportTopology::PropertyHandlerTopo(PPCPROPERTY_REQUEST req)
     }
 
     // mute
-    if (req->PropertyItem->Set == KSPROPSETID_Audio &&
+    if (IsEqualGUIDAligned(*req->PropertyItem->Set, KSPROPSETID_Audio) &&
         req->PropertyItem->Id == KSPROPERTY_AUDIO_MUTE)
     {
         if (req->Verb & KSPROPERTY_TYPE_GET)

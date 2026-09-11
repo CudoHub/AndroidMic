@@ -16,7 +16,7 @@ public:
     ~CMiniportTopology();
 
     // IMiniportTopology = IMiniport (GetDescription, DataRangeIntersection) + Init
-    IMP_IMiniportTopology
+    IMP_IMiniportTopology;   // макрос НЕ завершается ';' — точка с запятой обязательна
 
     // фабрика
     static NTSTATUS Create(

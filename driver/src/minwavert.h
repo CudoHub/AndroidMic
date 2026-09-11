@@ -51,7 +51,7 @@ public:
 
     // IMiniport + IMiniportWaveRT: GetDescription, DataRangeIntersection,
     // Init, NewStream, GetDeviceDescription
-    IMP_IMiniportWaveRT
+    IMP_IMiniportWaveRT;   // макрос НЕ завершается ';' — точка с запятой обязательна
 
     // фабрика
     static NTSTATUS Create(
@@ -71,12 +71,12 @@ public:
 
 protected:
     PPORTWAVERT m_Port = nullptr;
-    PSERVICEGROUP m_ServiceGroup = nullptr;
     CMiniportWaveRTStream* m_Stream = nullptr;
     DEVICE_DESCRIPTION m_DeviceDescription = {};
     WAVEFORMATEX m_Format = {};
 };
 
-typedef CMiniportWaveRT* PMINIPORTWAVERT;
+// ВНИМАНИЕ: PMINIPORTWAVERT уже typedef'нут в portcls.h как IMiniportWaveRT* —
+// свой typedef с тем же именем даёт C2371 (redefinition; different basic types).
 
 #include "minwavertstream.h"

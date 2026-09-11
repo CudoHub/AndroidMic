@@ -140,11 +140,6 @@ CMiniportWaveRT::CMiniportWaveRT(_In_ PUNKNOWN OuterUnknown) :
 
 CMiniportWaveRT::~CMiniportWaveRT()
 {
-    if (m_ServiceGroup)
-    {
-        m_Port->ReleaseServiceGroup(m_ServiceGroup);
-        m_ServiceGroup = nullptr;
-    }
     if (m_Port) m_Port->Release();
 }
 
@@ -261,11 +256,9 @@ CMiniportWaveRT::Init(
     m_Port = Port;
     m_Port->AddRef();
 
-    NTSTATUS ntStatus = PcNewServiceGroup(&m_ServiceGroup, PHONEMIC_TAG_GEN);
-    if (NT_SUCCESS(ntStatus))
-    {
-        m_Port->RegisterServiceGroup(m_ServiceGroup);
-    }
+    // ServiceGroup НЕ используется: у IPortWaveRT нет RegisterServiceGroup
+    // (это API порт-реализации, не мини-порта), а наш DPC-таймер тянет кольцо
+    // независимо; движок аудио читает WaveRT-буфер по notification events.
     return STATUS_SUCCESS;
 }
 

@@ -23,28 +23,29 @@ jobs:
       - name: Test Core
         run: dotnet test windows-app/tests/PhoneMic.Core.Tests/PhoneMic.Core.Tests.csproj -c Release
 
+      # UseXamlCompilerExecutable=false: XAML-компилятор запускается in-proc (net6.0),
+      # а не как net472-процесс. В exe-режиме при ошибке он молча выходит с кодом 1
+      # (MSB3073 без текста), т.к. Exec гасит OutputDeserializer; in-proc печатает
+      # реальные WMC-ошибки прямо в лог MSBuild.
       - name: Publish WinUI 3 (unpackaged, self-contained)
         run: >
           dotnet publish windows-app/src/PhoneMic.App/PhoneMic.App.csproj
           -c Release -r win-x64 --self-contained
           -p:Platform=x64 -p:WindowsAppSDKSelfContained=true
+          -p:UseXamlCompilerExecutable=false
 
-      # XamlCompiler.exe при ошибке pass1 молча выходит с кодом 1 (MSB3073 без
-      # текста): детали он пишет в output.json, который MSBuild не показывает.
-      # Дампим ввод/вывод компилятора, чтобы реальные WMC-ошибки были видны в логе.
+      # На случай отката на exe-режим: дампим ввод/вывод компилятора.
       - name: Dump XAML compiler diagnostics
         if: failure()
         shell: pwsh
         run: |
-          Get-ChildItem windows-app/src/PhoneMic.App/obj -Recurse -Filter output.json -ErrorAction SilentlyContinue | ForEach-Object {
-            Write-Host "=== $($_.FullName) ==="
-            Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue
+          $found = Get-ChildItem windows-app/src/PhoneMic.App/obj -Recurse -Include output.json,input.json -ErrorAction SilentlyContinue
+          if (-not $found) {
+            Write-Host "NO input.json/output.json found (in-proc mode does not write them; WMC errors are printed above in the log)"
           }
-          Get-ChildItem windows-app/src/PhoneMic.App/obj -Recurse -Filter input.json -ErrorAction SilentlyContinue | ForEach-Object {
-            Write-Host "=== $($_.FullName) ==="
-            $json = Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
-            Write-Host ("ProjectName: " + $json.ProjectName)
-            Write-Host ("XamlFiles: " + ($json.XamlFiles -join ', '))
+          foreach ($f in $found) {
+            Write-Host "=== $($f.FullName) ==="
+            Get-Content $f.FullName -Raw -ErrorAction SilentlyContinue
           }
 
       - name: Zip app
@@ -61,26 +62,38 @@ jobs:
 
   driver:
     # Фиксируем образ: windows-latest мигрировал на windows-2025 (VS 18), где
-    # winget-установка WDK 22621 не даёт рабочих km-хедеров (ntddk.h not found).
-    # windows-2022 = VS 2022: связка WDK 22621 + VSIX-интеграция проверенно работает.
+    # связка WDK 22621 + VS-интеграция сломана. windows-2022 = VS 2022 — проверенно.
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install WDK (winget)
+      # winget на GitHub-раннерах отсутствует как класс — ставим тихо через
+      # официальные bootstrappers с aka.ms (ссылки проверены, HTTP 200).
+      - name: Install Windows SDK 10.0.22621.755
         shell: pwsh
         run: |
-          winget install --id Microsoft.WindowsWDK.10.0.22621 --silent --accept-package-agreements --accept-source-agreements
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri 'https://aka.ms/winsdk/10.0.22621.755/winsdksetup.exe' -OutFile "$env:RUNNER_TEMP\winsdksetup.exe"
+          $p = Start-Process -Wait -PassThru -FilePath "$env:RUNNER_TEMP\winsdksetup.exe" -ArgumentList '/q','/norestart'
+          Write-Host "SDK setup exit: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "Windows SDK silent install failed (exit $($p.ExitCode))" }
 
-      # Без continue-on-error: если winget тихо провалился, падаем сразу
-      # с внятным сообщением, а не с непонятным "ntddk.h: No such file".
+      - name: Install WDK 10.0.22621.755
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri 'https://aka.ms/wdk/10.0.22621.755/wdksetup.exe' -OutFile "$env:RUNNER_TEMP\wdksetup.exe"
+          $p = Start-Process -Wait -PassThru -FilePath "$env:RUNNER_TEMP\wdksetup.exe" -ArgumentList '/q','/norestart'
+          Write-Host "WDK setup exit: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "WDK silent install failed (exit $($p.ExitCode))" }
+
+      # Громкая проверка: без km-хедеров падаем сразу с внятным сообщением,
+      # а не с непонятным "ntddk.h: No such file".
       - name: Verify WDK
         shell: pwsh
         run: |
           $ntddk = "${env:ProgramFiles(x86)}\Windows Kits\10\Include\10.0.22621.0\km\ntddk.h"
-          if (-not (Test-Path $ntddk)) {
-            throw "WDK 10.0.22621.0 not found (missing: $ntddk). winget WDK install failed."
-          }
+          if (-not (Test-Path $ntddk)) { throw "WDK 10.0.22621.0 km headers missing ($ntddk)" }
           Write-Host "WDK 10.0.22621.0 OK"
 
       - name: Build driver (MSBuild)

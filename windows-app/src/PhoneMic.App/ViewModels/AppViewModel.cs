@@ -112,6 +112,11 @@ public partial class AppViewModel : ObservableObject
         TestSine = !TestSine;
         AppServices.Session.SetTestSine(TestSine);
     }
+    public void SetTestSine(bool on)
+    {
+        TestSine = on;
+        AppServices.Session.SetTestSine(on);
+    }
 
     public void RevealToken() => TokenDisplay = AppServices.Settings.Token;
     public void HideToken() => TokenDisplay = "";

@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using PhoneMic.App.Services;
 using PhoneMic.App.ViewModels;
+using PhoneMic.Core.Logging;
 
 namespace PhoneMic.App.Views;
 

@@ -81,25 +81,23 @@ class Prefs private constructor(ctx: Context) {
         get() = sp.getString(KEY_WFD_PASS, "") ?: ""
         set(v) = sp.edit().putString(KEY_WFD_PASS, v).apply()
 
-    private companion object {
-        const val KEY_TOKEN = "token"
-        const val KEY_PIN = "cert_pin"
-        const val KEY_HOST = "host"
-        const val KEY_PORT = "port"
-        const val KEY_TRANSPORT = "transport"
-        const val KEY_CODEC = "codec"
-        const val KEY_FRAME_MS = "frame_ms"
-        const val KEY_BITRATE = "bitrate_kbps"
-        const val KEY_AEC = "aec"
-        const val KEY_AGC = "agc"
-        const val KEY_NS = "ns"
-        const val KEY_MEDIA_MODE = "media_mode"
-        const val KEY_KEEP_SCREEN = "keep_screen"
-        const val KEY_AUTO_RESTART = "auto_restart"
-        const val KEY_WFD_PASS = "wfd_pass"
-    }
-
     companion object {
+        private const val KEY_TOKEN = "token"
+        private const val KEY_PIN = "cert_pin"
+        private const val KEY_HOST = "host"
+        private const val KEY_PORT = "port"
+        private const val KEY_TRANSPORT = "transport"
+        private const val KEY_CODEC = "codec"
+        private const val KEY_FRAME_MS = "frame_ms"
+        private const val KEY_BITRATE = "bitrate_kbps"
+        private const val KEY_AEC = "aec"
+        private const val KEY_AGC = "agc"
+        private const val KEY_NS = "ns"
+        private const val KEY_MEDIA_MODE = "media_mode"
+        private const val KEY_KEEP_SCREEN = "keep_screen"
+        private const val KEY_AUTO_RESTART = "auto_restart"
+        private const val KEY_WFD_PASS = "wfd_pass"
+
         @Volatile private var inst: Prefs? = null
         fun get(ctx: Context): Prefs = inst ?: synchronized(this) {
             inst ?: Prefs(ctx.applicationContext).also { inst = it }

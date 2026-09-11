@@ -198,7 +198,7 @@ fun HomeScreen(vm: MainViewModel) {
         Spacer(Modifier.height(24.dp))
     }
 
-    SnackbarHost(host = snackbar)
+    SnackbarHost(hostState = snackbar)
 
     // --- TOFU-диалог ---
     val pending = session.pendingPin

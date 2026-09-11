@@ -39,7 +39,7 @@ public sealed partial class SecurityPage : Page
         _ = dlg.ShowAsync();
         dlg.PrimaryButtonClick += (_, _) =>
         {
-            TokenBox.Text = App.ViewModels.AppViewModel.Instance.RegenerateToken();
+            TokenBox.Text = ViewModels.AppViewModel.Instance.RegenerateToken();
         };
     }
 

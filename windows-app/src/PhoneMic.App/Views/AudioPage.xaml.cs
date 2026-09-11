@@ -26,11 +26,11 @@ public sealed partial class AudioPage : Page
         var frameMs = FrameBox.SelectedIndex == 0 ? 10 : 20;
         var bitrate = BitrateBox.SelectedIndex switch { 0 => 24, 1 => 32, 3 => 64, 4 => 96, 5 => 128, _ => 48 };
         var jitter = JitterBox.SelectedIndex switch { 0 => "ultra", 2 => "stable", _ => "balance" };
-        App.ViewModels.AppViewModel.Instance.SaveAudioSettings(codec, frameMs, bitrate, jitter);
+        ViewModels.AppViewModel.Instance.SaveAudioSettings(codec, frameMs, bitrate, jitter);
     }
 
     private void TestSine_Toggled(object sender, RoutedEventArgs e)
     {
-        App.ViewModels.AppViewModel.Instance.SetTestSine(TestSineToggle.IsOn);
+        ViewModels.AppViewModel.Instance.SetTestSine(TestSineToggle.IsOn);
     }
 }

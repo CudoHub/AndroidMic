@@ -22,25 +22,17 @@ public sealed class WifiDirectService : IDisposable
         if (Advertising) return;
         try
         {
-            _publisher = new WiFiDirectAdvertisementPublisher
+            _publisher = new WiFiDirectAdvertisementPublisher();
+            _publisher.Advertisement.ListenStateDiscoverability =
+                WiFiDirectAdvertisementListenStateDiscoverability.Intensive;
+            _publisher.StatusChanged += (p, args) =>
             {
-                ListenStateDiscoverability = WiFiDirectAdvertisementListenStateDiscoverability.Intensive
-            };
-            _publisher.ListenStateChanged += (p, _) =>
-            {
-                Advertising = p.ListenState == WiFiDirectAdvertisementListenState.Listening;
-                Status = Advertising ? "Публикация активна (Group Owner)" : "Остановлено";
-                AppLog.Info("WFD", Status);
-                Changed?.Invoke();
-            };
-            _publisher.ConnectionStateChanged += (p, args) =>
-            {
-                try
-                {
-                    var ep = args?.ConnectionInformation?.EndpointName ?? "";
-                    Status = $"Wi-Fi Direct: подключается {ep}";
-                }
-                catch { }
+                Advertising = args.Status == WiFiDirectAdvertisementPublisherStatus.Started;
+                Status = Advertising ? "Публикация активна (Group Owner)"
+                       : args.Status == WiFiDirectAdvertisementPublisherStatus.Aborted
+                            ? "Ошибка Wi-Fi Direct: " + args.Error
+                       : "Остановлено";
+                AppLog.Info("WFD", $"{Status} ({args.Status})");
                 Changed?.Invoke();
             };
             _publisher.Start();

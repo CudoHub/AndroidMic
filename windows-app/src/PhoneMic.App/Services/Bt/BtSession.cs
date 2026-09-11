@@ -305,7 +305,7 @@ public sealed class ControlBtChannel
     private readonly Stream _output;
     private DirectionalEncryptor? _enc;
     private DirectionalDecryptor? _dec;
-    private ulong _plainSeq;
+    private uint _plainSeq;
     private readonly object _lock = new();
 
     public ControlBtChannel(Stream input, Stream output)

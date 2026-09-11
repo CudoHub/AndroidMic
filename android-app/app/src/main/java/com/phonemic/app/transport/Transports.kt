@@ -69,7 +69,7 @@ class WifiTransport(private val host: String) : Transport {
 }
 
 /**
- * USB: (a) USB-tethering — ПК = шлюз интерфейса usb*/rndis*; (b) adb reverse — 127.0.0.1.
+ * USB: (a) USB-tethering — ПК = шлюз интерфейса usb/rndis; (b) adb reverse — 127.0.0.1.
  * Кандидаты пробуются по порядку.
  */
 class UsbTransport : Transport {
@@ -84,9 +84,10 @@ class UsbTransport : Transport {
             val lp: LinkProperties = cm.getLinkProperties(network) ?: continue
             val name = lp.interfaceName ?: continue
             if (name.startsWith("usb") || name.startsWith("rndis")) {
-                // шлюз точка-точка ссылки — это ПК
-                for (gl in lp.dnsServers) { /* dns не ПК, пропускаем */ }
-                lp.gateway?.hostAddress?.let { candidates.add(it) }
+                // шлюзы маршрутов точка-точка ссылки — это ПК (LinkProperties.gateway не существует)
+                for (r in lp.routes) {
+                    r.gateway?.hostAddress?.let { candidates.add(it) }
+                }
                 // фолбэк: адрес подсети .1
                 for (la in lp.linkAddresses) {
                     val ip = la.address.hostAddress?.substringBefore('/') ?: continue
@@ -143,14 +144,17 @@ class WifiDirectTransport(private val passphrase: String) : Transport {
             it.deviceName.contains("DIRECT", ignoreCase = true)
         } ?: throw TransportException("ПК (Wi-Fi Direct) не найден. Включите публикацию в приложении ПК.")
 
-        // 2. connect (ПК — Group Owner, intent 0). Пароль WPA2 — через WifiP2pConfig.passphrase (API 33+);
-        // на более старых Android система сама спросит пароль при подключении.
-        val cfg = WifiP2pConfig().apply {
-            deviceAddress = target.deviceAddress
-            groupOwnerIntent = 0
-            if (android.os.Build.VERSION.SDK_INT >= 33 && passphrase.isNotBlank()) {
-                passphrase = this@WifiDirectTransport.passphrase
-            } else {
+        // 2. connect (ПК — Group Owner, intent 0). Пароль WPA2 — через WifiP2pConfig.Builder (API 33+,
+        //    поле passphrase read-only); на более старых Android система сама спросит пароль (PBC/диалог).
+        val cfg: WifiP2pConfig = if (android.os.Build.VERSION.SDK_INT >= 33 && passphrase.isNotBlank()) {
+            WifiP2pConfig.Builder()
+                .setDeviceAddress(android.net.MacAddress.fromString(target.deviceAddress))
+                .setPassphrase(passphrase)
+                .build()
+        } else {
+            WifiP2pConfig().apply {
+                deviceAddress = target.deviceAddress
+                groupOwnerIntent = 0
                 wps.setup = WpsInfo.PBC
             }
         }
@@ -165,9 +169,11 @@ class WifiDirectTransport(private val passphrase: String) : Transport {
         if (connected == false) throw TransportException("Не удалось подключиться к группе Wi-Fi Direct")
 
         // 3. ждём GROUP_FORMED → groupOwnerAddress
-        val info: WifiP2pInfo? = awaitConnectionInfo(ctx, mgr, channel)
+        val info = awaitConnectionInfo(ctx, mgr, channel)
             ?: throw TransportException("Группа Wi-Fi Direct не сформировалась (проверьте пароль)")
-        val host = info.groupOwnerAddress?.hostAddress
+        val goAddr = info.groupOwnerAddress
+            ?: throw TransportException("Не получен адрес ПК в группе")
+        val host = goAddr.hostAddress
             ?: throw TransportException("Не получен адрес ПК в группе")
         delay(1500) // дать DHCP завершиться
         val ok = withContext(Dispatchers.IO) { WifiTransport.probe(host, port) }

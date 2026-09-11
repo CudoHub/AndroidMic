@@ -15,7 +15,6 @@ public sealed class JitterBuffer
     private readonly int _minMs;
     private readonly int _maxMs;
     private float _targetMs;
-    private readonly int _frameMs = 10;
 
     private uint _lastSeq;      // последний выданный seq
     private bool _started;

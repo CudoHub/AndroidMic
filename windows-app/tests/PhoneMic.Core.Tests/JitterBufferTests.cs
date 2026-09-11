@@ -38,8 +38,12 @@ public class JitterBufferTests
     public void Underrun_Adapts_Target()
     {
         var jb = new JitterBuffer((10, 20, 250));
+        // заполняем до target (20 мс = 960 сэмплов) — буфер стартует и выдаёт кадр
+        jb.Push(1, new short[960]);
+        Assert.NotNull(jb.Drain());
+        // до старта Drain не адаптирует target (иначе цель улетала бы в max при опросе раз в 5 мс)
         int before = jb.TargetMs;
-        jb.Drain(); // пусто → underrun → target растёт
+        jb.Drain(); // стартовали, очередь пуста → underrun → target растёт
         Assert.True(jb.TargetMs > before);
     }
 }

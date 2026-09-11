@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using PhoneMic.Core.Audio;
@@ -36,7 +37,7 @@ public sealed class MediaIngestService : IDisposable
     public bool UdpRunning { get; private set; }
     public bool TcpRunning { get; private set; }
 
-    public event Action<uint, long>? StatsChanged; // pktTotal, pktLost
+    public event Action<long, long>? StatsChanged; // pktTotal, pktLost
 
     /// <summary>Настройка под сессию. Вызывается после handshake.</summary>
     public void Configure(byte[] tokenRaw, byte[] mediaSalt, string codec, (int Min, int Target, int Max) jitter)

@@ -1,5 +1,6 @@
 package com.phonemic.app.crypto
 
+import com.phonemic.app.core.Constants
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.security.cert.Certificate

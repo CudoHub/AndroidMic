@@ -1,4 +1,6 @@
+using Concentus;
 using Concentus.Structs;
+using PhoneMic.Core.Protocol;
 
 namespace PhoneMic.Core.Audio;
 
@@ -8,7 +10,8 @@ namespace PhoneMic.Core.Audio;
 /// </summary>
 public sealed class OpusDecoderWrapper : IDisposable
 {
-    private readonly OpusDecoder _decoder = new(ProtocolConstants.SampleRate, ProtocolConstants.Channels);
+    private readonly IOpusDecoder _decoder =
+        OpusCodecFactory.CreateDecoder(ProtocolConstants.SampleRate, ProtocolConstants.Channels, null);
     private readonly short[] _pcm = new short[ProtocolConstants.SampleRate / 25]; // до 40 мс
     private bool _preskipDone;
     private int _preskipRemaining = ProtocolConstants.OpusPreskip;
@@ -19,8 +22,7 @@ public sealed class OpusDecoderWrapper : IDisposable
     /// <returns>PCM16 samples; пустой массив — декодировать нечего.</returns>
     public short[] Decode(ReadOnlySpan<byte> opusFrame, int frameSamples)
     {
-        int n = _decoder.Decode(opusFrame.IsEmpty ? null : opusFrame.ToArray(), 0,
-            opusFrame.Length, _pcm, 0, frameSamples, false);
+        int n = _decoder.Decode(opusFrame, _pcm.AsSpan(), frameSamples, false);
         ApplyPreskip(ref n);
         return _pcm.Take(n).ToArray();
     }
@@ -28,7 +30,7 @@ public sealed class OpusDecoderWrapper : IDisposable
     /// <summary>Packet Loss Concealment: декодирование пустого кадра.</summary>
     public short[] DecodePlc(int frameSamples)
     {
-        int n = _decoder.Decode(null, 0, 0, _pcm, 0, frameSamples, false);
+        int n = _decoder.Decode(ReadOnlySpan<byte>.Empty, _pcm.AsSpan(), frameSamples, false);
         ApplyPreskip(ref n);
         return _pcm.Take(n).ToArray();
     }

@@ -87,9 +87,10 @@ public sealed class ControlServerService : IDisposable
                 continue;
             }
             _clientConnected = true;
+            var epLocal = ep;
             _ = Task.Run(async () =>
             {
-                try { await HandleClient(client, ct); }
+                try { await HandleClient(client, epLocal, ct); }
                 finally
                 {
                     _clientConnected = false;
@@ -105,7 +106,7 @@ public sealed class ControlServerService : IDisposable
         AppLog.Info("CtlSrv", $"rejected: {code}");
     }
 
-    private async Task HandleClient(TcpClient client, CancellationToken ct)
+    private async Task HandleClient(TcpClient client, IPEndPoint? ep, CancellationToken ct)
     {
         string device = "?";
         try
@@ -140,7 +141,7 @@ public sealed class ControlServerService : IDisposable
             await Send(ssl, new Dictionary<string, object?> { ["t"] = "challenge", ["nonce"] = TokenUtil.ToBase64Url(nonce) }, ct);
 
             var auth = await ReadJson(ssl, ct);
-            if (auth == null || auth.Value.GetPropertySafe("t") != "auth")
+            if (auth == null || auth.Value.GetPropertySafe("t")?.ToString() != "auth")
             {
                 await Send(ssl, new Dictionary<string, object?> { ["t"] = "err", ["code"] = "invalid_state" }, ct);
                 return;

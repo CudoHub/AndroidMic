@@ -78,7 +78,7 @@ public sealed class DriverService : IDisposable
         {
             if (!DeviceIoControlWrapped(DriverApi.IOCTL_PHONEMIC_GET_VERSION, IntPtr.Zero, 0, outBuf, 4, out _))
                 return false;
-            version = Marshal.ReadInt32(outBuf);
+            version = unchecked((uint)Marshal.ReadInt32(outBuf));
             return true;
         }
         finally { Marshal.FreeHGlobal(outBuf); }

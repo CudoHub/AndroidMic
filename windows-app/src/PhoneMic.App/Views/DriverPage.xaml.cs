@@ -40,7 +40,7 @@ public sealed partial class DriverPage : Page
             DriverInfoBar.Message = "Драйвер не найден. Zoom/Discord/OBS увидят микрофон только после установки драйвера.";
             StateText.Text = "устройство не найдено (GUID 7C0A9E52-3B14-4D6F-9A8B-2E5C1D3F7A01)";
         }
-        App.ViewModels.AppViewModel.Instance.UpdateDriverInfo();
+        ViewModels.AppViewModel.Instance.UpdateDriverInfo();
     }
 
     private void Refresh_Click(object sender, RoutedEventArgs e)

@@ -81,7 +81,7 @@ public sealed class AudioPipelineService : IDisposable
             short[] frame;
             if (_testSine)
             {
-                frame = new short[PcmChunkSamples];
+                frame = new short[ProtocolConstants.PcmChunkSamples];
                 lock (_lock)
                 {
                     for (int i = 0; i < frame.Length; i++)

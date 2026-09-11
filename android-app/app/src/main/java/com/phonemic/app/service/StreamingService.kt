@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import com.phonemic.app.App
+import com.phonemic.app.BuildConfig
 import com.phonemic.app.MainActivity
 import com.phonemic.app.R
 import com.phonemic.app.audio.CaptureEngine

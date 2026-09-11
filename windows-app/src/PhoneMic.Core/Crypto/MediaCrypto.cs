@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using PhoneMic.Core.Protocol;
 
 namespace PhoneMic.Core.Crypto;
 
@@ -57,7 +58,7 @@ public sealed class MediaCrypto
 
     public static byte[] Encrypt(byte[] key, byte[] prefix4, ReadOnlySpan<byte> plaintext)
     {
-        ulong counter = Interlocked.Increment(ref CounterSeed); // тестовый путь; боевой — DirectionalEncryptor
+        ulong counter = unchecked((ulong)Interlocked.Increment(ref CounterSeed)); // тестовый путь; боевой — DirectionalEncryptor
         return EncryptWithCounter(key, prefix4, counter, plaintext);
     }
 

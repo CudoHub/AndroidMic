@@ -25,7 +25,7 @@ public class MediaPacketTests
         h.Write(buf);
         Assert.Equal(0x50, buf[0]);
         Assert.Equal(0x4D, buf[1]);
-        Assert.Equal(0x01, BinaryPrimitives.ReadUInt16BigEndian(buf.AsSpan(14)));
+        Assert.Equal(0x0102, BinaryPrimitives.ReadUInt16BigEndian(buf.AsSpan(14))); // PayloadLen BE
 
         Assert.True(MediaPacketHeader.TryParse(buf, out var parsed));
         Assert.Equal(h.Seq, parsed.Seq);

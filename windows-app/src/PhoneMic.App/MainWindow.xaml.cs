@@ -11,7 +11,7 @@ public sealed partial class MainWindow : Window
 {
     public AppViewModel Vm { get; } = AppViewModel.Instance;
 
-    private H.NotifyIcon.TaskbarIcon? _tray;
+    private Hardcodet.Wpf.TaskbarNotification.TaskbarIcon? _tray;
     private bool _realExit;
 
     public MainWindow()
@@ -46,10 +46,10 @@ public sealed partial class MainWindow : Window
 
     private void CreateTray()
     {
-        _tray = new H.NotifyIcon.TaskbarIcon
+        _tray = new Hardcodet.Wpf.TaskbarNotification.TaskbarIcon
         {
             ToolTipText = "PhoneMic",
-            ContextMenuMode = H.NotifyIcon.PopupMenuMode.SecondaryWindow,
+            PopupActivation = Hardcodet.Wpf.TaskbarNotification.PopupActivationMode.RightClick,
         };
         _tray.LeftClickCommand = new RelayCommand(ShowFromTray);
     }
@@ -65,7 +65,7 @@ public sealed partial class MainWindow : Window
         _realExit = true;
         _tray?.Dispose();
         Close();
-        Current.Exit();
+        Application.Current.Exit();
     }
 
     private void Nav_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)

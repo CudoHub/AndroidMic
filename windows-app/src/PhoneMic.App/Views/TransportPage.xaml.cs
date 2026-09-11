@@ -39,7 +39,7 @@ public sealed partial class TransportPage : Page
         AppLog.Info("Transport", $"ports: control={ctl} media={media}");
     }
 
-    private void VmSave(int ctl, int media) => App.ViewModels.AppViewModel.Instance.SavePorts(ctl, media);
+    private void VmSave(int ctl, int media) => ViewModels.AppViewModel.Instance.SavePorts(ctl, media);
 
     private void MediaMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -49,7 +49,7 @@ public sealed partial class TransportPage : Page
 
     private void Wfd_Click(object sender, RoutedEventArgs e)
     {
-        App.ViewModels.AppViewModel.Instance.ToggleWfd();
+        ViewModels.AppViewModel.Instance.ToggleWfd();
         WfdStatusText.Text = AppServices.WifiDirect.Status;
         WfdButton.Content = AppServices.WifiDirect.Advertising ? "Выключить публикацию" : "Включить публикацию";
     }

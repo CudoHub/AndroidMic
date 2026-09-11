@@ -8,15 +8,23 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.phonemic.app.ui.HomeScreen
@@ -50,19 +58,19 @@ class MainActivity : ComponentActivity() {
                         NavigationBar {
                             NavigationBarItem(
                                 selected = tab == 0, onClick = { tab = 0 },
-                                icon = { Icon(androidx.compose.material.icons.Icons.Filled.Mic, null) },
+                                icon = { Icon(Icons.Filled.Mic, null) },
                                 label = { Text(getString(R.string.tab_home)) }
                             )
                             NavigationBarItem(
                                 selected = tab == 1, onClick = { tab = 1 },
-                                icon = { Icon(androidx.compose.material.icons.Icons.Filled.Settings, null) },
+                                icon = { Icon(Icons.Filled.Settings, null) },
                                 label = { Text(getString(R.string.tab_settings)) }
                             )
                         }
                     }
                 ) { padding ->
-                    androidx.compose.foundation.layout.Box(
-                        modifier = androidx.compose.ui.Modifier
+                    Box(
+                        modifier = Modifier
                             .padding(padding)
                     ) {
                         if (tab == 0) HomeScreen(vm) else SettingsScreen(vm)
@@ -98,7 +106,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** collectAsState, безопасный для использования до первой рекомпозиции. */
+/** collectAsState для StateFlow: значение есть всегда, initial не нужен. */
 @androidx.compose.runtime.Composable
 private fun <T> kotlinx.coroutines.flow.StateFlow<T>.collectAsStateSafe() =
-    androidx.compose.runtime.collectAsState(initial = value)
+    collectAsState()

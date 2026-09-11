@@ -1,5 +1,6 @@
 /*++
 PhoneMic driver: реализация топологии (VOLUME / MUTE узлы, jack description).
+Сигнатуры и структуры — в точности по portcls.h 26100.
 --*/
 #include "common.h"
 #include "adapter.h"
@@ -10,8 +11,39 @@ PhoneMic driver: реализация топологии (VOLUME / MUTE узлы
 #define TOPO_NODE_MUTE    1
 
 // сохранённые значения (не влияют на данные — громкость применяет движок)
-static LONG g_TopologyVolume = 0x0000C000;  // 0 dB (фикс-точка, KSDATAFORMAT... уровень)
+static LONG g_TopologyVolume = 0x0000C000;  // 0 dB (фикс-точка)
 static BOOLEAN g_TopologyMute = FALSE;
+
+//=============================================================================
+// стандартный BASICSUPPORT: KSPROPERTY_DESCRIPTION с флагами доступа
+//=============================================================================
+NTSTATUS PhonemicPropertyBasicSupport(_In_ PPCPROPERTY_REQUEST PropertyRequest)
+{
+    PAGED_CODE();
+    ASSERT(PropertyRequest);
+    if (!PropertyRequest) return STATUS_INVALID_PARAMETER;
+
+    ULONG access = KSPROPERTY_TYPE_BASICSUPPORT |
+                   (PropertyRequest->PropertyItem->Flags &
+                    (KSPROPERTY_TYPE_GET | KSPROPERTY_TYPE_SET));
+
+    if (PropertyRequest->ValueSize >= sizeof(KSPROPERTY_DESCRIPTION))
+    {
+        PKSPROPERTY_DESCRIPTION desc = (PKSPROPERTY_DESCRIPTION)PropertyRequest->Value;
+        RtlZeroMemory(desc, sizeof(KSPROPERTY_DESCRIPTION));
+        desc->AccessFlags = access;
+        desc->DescriptionSize = sizeof(KSPROPERTY_DESCRIPTION);
+        PropertyRequest->ValueSize = sizeof(KSPROPERTY_DESCRIPTION);
+        return STATUS_SUCCESS;
+    }
+    if (PropertyRequest->ValueSize == 0)
+    {
+        PropertyRequest->ValueSize = sizeof(KSPROPERTY_DESCRIPTION);
+        return STATUS_SUCCESS;   // запрос размера
+    }
+    PropertyRequest->ValueSize = sizeof(KSPROPERTY_DESCRIPTION);
+    return STATUS_BUFFER_TOO_SMALL;
+}
 
 //=============================================================================
 // automation: пины
@@ -28,32 +60,37 @@ static PCPROPERTY_ITEM TopoPinProperties[] =
 };
 DEFINE_PCAUTOMATION_TABLE_PROP(TopoPinAutomation, TopoPinProperties);
 
+// PCPIN_DESCRIPTOR: {MaxGlobal, MaxFilter, MinFilter, Automation, KSPIN_DESCRIPTOR}
 static PCPIN_DESCRIPTOR TopoPinDescriptors[] =
 {
     // pin 0: мост «микрофон» — источник данных в граф
     {
-        0, 1, &TopoPinAutomation,
+        1, 1, 0,
+        &TopoPinAutomation,
         {
-            0, NULL,
-            0, NULL,
+            0, NULL,            // interfaces
+            0, NULL,            // mediums
+            0, NULL,            // data ranges (мост — без ограничений)
             KSPIN_DATAFLOW_OUT,
             KSPIN_COMMUNICATION_BRIDGE,
-            STATICGUIDOF(KSCATEGORY_AUDIO),
-            STATICGUIDOF(KSNODETYPE_MICROPHONE),
-            0, NULL
+            &KSCATEGORY_AUDIO,
+            &KSNODETYPE_MICROPHONE,
+            0                   // Reserved
         }
     },
     // pin 1: к wave-фильтру
     {
-        0, 1, &TopoPinAutomation,
+        1, 1, 0,
+        &TopoPinAutomation,
         {
+            0, NULL,
             0, NULL,
             0, NULL,
             KSPIN_DATAFLOW_IN,
             KSPIN_COMMUNICATION_SINK,
-            STATICGUIDOF(KSCATEGORY_AUDIO),
-            STATICGUIDOF(KSNODETYPE_MICROPHONE),
-            0, NULL
+            &KSCATEGORY_AUDIO,
+            &KSNODETYPE_MICROPHONE,
+            0
         }
     }
 };
@@ -110,6 +147,9 @@ static PCCONNECTION_DESCRIPTOR TopoConnections[] =
     { TOPO_NODE_MUTE,   1,               PCFILTER_NODE,    PIN_TOPO_WAVESINK },
 };
 
+// PCFILTER_DESCRIPTOR: {Version, Automation, PinSize, PinCount, Pins,
+//                       NodeSize, NodeCount, Nodes,
+//                       ConnectionCount, Connections, CategoryCount, Categories}
 static PCFILTER_DESCRIPTOR MiniportFilterTopology =
 {
     0,                          // Version
@@ -120,22 +160,44 @@ static PCFILTER_DESCRIPTOR MiniportFilterTopology =
     sizeof(PCNODE_DESCRIPTOR),
     SIZEOF_ARRAY(TopoNodeDescriptors),
     TopoNodeDescriptors,
-    0, NULL,                    // filter properties (нет)
-    0, NULL,                    // methods (нет)
-    0, NULL,                    // events (нет)
     SIZEOF_ARRAY(TopoConnections),  // ConnectionCount
-    TopoConnections,                // ConnectionList
+    TopoConnections,                // Connections
+    0, NULL                         // CategoryCount, Categories
 };
 
 //=============================================================================
 
 CMiniportTopology::CMiniportTopology(_In_ PUNKNOWN OuterUnknown) :
-    CUnknown("MiniportTopology", OuterUnknown)
+    CUnknown(OuterUnknown)
 {
 }
 
 CMiniportTopology::~CMiniportTopology()
 {
+}
+
+STDMETHODIMP_(NTSTATUS)
+CMiniportTopology::NonDelegatingQueryInterface(_In_ REFIID Interface, _COM_Outptr_ PVOID* Object)
+{
+    ASSERT(Object);
+    if (!Object) return STATUS_INVALID_PARAMETER;
+
+    if (IsEqualGUIDAligned(Interface, IID_IUnknown))
+    {
+        *Object = (PVOID)(PUNKNOWN)(IMiniportTopology*)this;
+        ((PUNKNOWN)*Object)->AddRef();
+    }
+    else if (IsEqualGUIDAligned(Interface, IID_IMiniportTopology))
+    {
+        *Object = (PVOID)(IMiniportTopology*)this;
+        ((PUNKNOWN)(IMiniportTopology*)this)->AddRef();
+    }
+    else
+    {
+        *Object = nullptr;
+        return CUnknown::NonDelegatingQueryInterface(Interface, Object);
+    }
+    return STATUS_SUCCESS;
 }
 
 NTSTATUS CMiniportTopology::Create(
@@ -154,44 +216,38 @@ NTSTATUS CMiniportTopology::Create(
     return STATUS_SUCCESS;
 }
 
-IMP_IMiniport::GetDeviceDescription(_Out_ PDEVICE_DESCRIPTION* DeviceDescription)
-{
-    if (m_DeviceDescription == nullptr)
-    {
-        m_DeviceDescription = (PDEVICE_DESCRIPTION)ExAllocatePool2(
-            POOL_FLAG_NON_PAGED, sizeof(DEVICE_DESCRIPTION), PHONEMIC_TAG_GEN);
-        if (m_DeviceDescription == nullptr) return STATUS_INSUFFICIENT_RESOURCES;
-        RtlZeroMemory(m_DeviceDescription, sizeof(DEVICE_DESCRIPTION));
-        m_DeviceDescription->Master = TRUE;
-    }
-    *DeviceDescription = m_DeviceDescription;
-    return STATUS_SUCCESS;
-}
-
-IMP_IMiniportTopology::DataRangeIntersection(
+#pragma code_seg("PAGE")
+STDMETHODIMP_(NTSTATUS)
+CMiniportTopology::DataRangeIntersection(
     _In_ ULONG PinId,
     _In_ PKSDATARANGE ClientDataRange,
     _In_ PKSDATARANGE MiniportDataRange,
     _In_ ULONG OutputBufferLength,
-    _Out_writes_bytes_to_opt_(OutputBufferLength, *ResultantFormatSize) PVOID ResultantFormat,
-    _Out_ PULONG ResultantFormatSize)
+    _Out_writes_bytes_to_opt_(OutputBufferLength, *ResultantFormatLength) PVOID ResultantFormat,
+    _Out_ PULONG ResultantFormatLength)
 {
     UNREFERENCED_PARAMETER(PinId);
     UNREFERENCED_PARAMETER(ClientDataRange);
     UNREFERENCED_PARAMETER(MiniportDataRange);
     UNREFERENCED_PARAMETER(OutputBufferLength);
     UNREFERENCED_PARAMETER(ResultantFormat);
-    *ResultantFormatSize = 0;
+    PAGED_CODE();
+    *ResultantFormatLength = 0;
     return STATUS_NOT_SUPPORTED;
 }
 
-IMP_IMiniportTopology::GetDescription(_Out_ PCFILTER_DESCRIPTOR** FilterDescriptor)
+STDMETHODIMP_(NTSTATUS)
+CMiniportTopology::GetDescription(_Out_ PPCFILTER_DESCRIPTOR* FilterDescriptor)
 {
+    PAGED_CODE();
+    ASSERT(FilterDescriptor);
+    if (!FilterDescriptor) return STATUS_INVALID_PARAMETER;
     *FilterDescriptor = &MiniportFilterTopology;
     return STATUS_SUCCESS;
 }
 
-IMP_IMiniportTopology::Init(
+STDMETHODIMP_(NTSTATUS)
+CMiniportTopology::Init(
     _In_ PUNKNOWN UnknownAdapter,
     _In_ PRESOURCELIST ResourceList,
     _In_ PPORTTOPOLOGY Port)
@@ -202,26 +258,27 @@ IMP_IMiniportTopology::Init(
     PAGED_CODE();
     return STATUS_SUCCESS;
 }
+#pragma code_seg()
 
 // =============================== свойства ===================================
 
 NTSTATUS CMiniportTopology::PropertyHandlerTopo(PPCPROPERTY_REQUEST req)
 {
     PAGED_CODE();
-    if (req == nullptr || req->Property == nullptr) return STATUS_INVALID_PARAMETER;
+    if (req == nullptr || req->PropertyItem == nullptr) return STATUS_INVALID_PARAMETER;
 
     if (req->Verb & KSPROPERTY_TYPE_BASICSUPPORT)
     {
-        return PcPropertyHandlerBasicSupport(req);
+        return PhonemicPropertyBasicSupport(req);
     }
 
     // jack description
-    if (req->Property->Set == KSPROPSETID_Jack &&
-        req->Property->Id == KSPROPERTY_JACK_DESCRIPTION)
+    if (req->PropertyItem->Set == KSPROPSETID_Jack &&
+        req->PropertyItem->Id == KSPROPERTY_JACK_DESCRIPTION)
     {
         if (!(req->Verb & KSPROPERTY_TYPE_GET)) return STATUS_NOT_SUPPORTED;
         KSJACK_DESCRIPTION jack;
-        jack.ChannelMapping = 1;             // KSAUDIO_SPEAKER_MONO
+        jack.ChannelMapping = KSAUDIO_SPEAKER_MONO;
         jack.Color = 0;
         jack.ConnectionType = eConnType3Point5mm;
         jack.GeoLocation = eGeoLocRear;
@@ -237,8 +294,8 @@ NTSTATUS CMiniportTopology::PropertyHandlerTopo(PPCPROPERTY_REQUEST req)
     }
 
     // volume level (per channel, mono)
-    if (req->Property->Set == KSPROPSETID_Audio &&
-        req->Property->Id == KSPROPERTY_AUDIO_VOLUMELEVEL)
+    if (req->PropertyItem->Set == KSPROPSETID_Audio &&
+        req->PropertyItem->Id == KSPROPERTY_AUDIO_VOLUMELEVEL)
     {
         if (req->Verb & KSPROPERTY_TYPE_GET)
         {
@@ -256,8 +313,8 @@ NTSTATUS CMiniportTopology::PropertyHandlerTopo(PPCPROPERTY_REQUEST req)
     }
 
     // mute
-    if (req->Property->Set == KSPROPSETID_Audio &&
-        req->Property->Id == KSPROPERTY_AUDIO_MUTE)
+    if (req->PropertyItem->Set == KSPROPSETID_Audio &&
+        req->PropertyItem->Id == KSPROPERTY_AUDIO_MUTE)
     {
         if (req->Verb & KSPROPERTY_TYPE_GET)
         {

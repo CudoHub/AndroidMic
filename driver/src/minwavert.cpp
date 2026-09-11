@@ -1,6 +1,6 @@
 /*++
 PhoneMic driver: реализация IMiniportWaveRT (описание, дескриптор фильтра,
-свойства RTAudio, создание потока).
+создание потока). Сигнатуры методов — в точности по portcls.h 26100.
 --*/
 #include "common.h"
 #include "adapter.h"
@@ -89,25 +89,30 @@ static PCPROPERTY_ITEM WavePinProperties[] =
 static DEFINE_PCAUTOMATION_TABLE_PROP(WavePinAutomation, WavePinProperties);
 
 // пин: capture (данные уходят клиенту), единственный инстанс
+// PCPIN_DESCRIPTOR: {MaxGlobalInstanceCount, MaxFilterInstanceCount,
+//                    MinFilterInstanceCount, AutomationTable, KSPIN_DESCRIPTOR}
 static PCPIN_DESCRIPTOR WavePinDescriptors[] =
 {
     {
-        0,                      // InstanceCount (заполняет порт)
-        1,                      // PossibleInstanceCount
-        &WavePinAutomation,     // AutomationTable
+        1, 1, 0,                // max global / max filter / min filter
+        &WavePinAutomation,
         {
             0, NULL,            // interfaces
             0, NULL,            // mediums
+            PHONEMIC_PIN_DATA_RANGE_COUNT, PhonemicPinDataRanges,
             KSPIN_DATAFLOW_OUT, // capture: данные наружу
             KSPIN_COMMUNICATION_SINK,
-            STATICGUIDOF(KSCATEGORY_AUDIO),
-            STATICGUIDOF(KSNODETYPE_MICROPHONE),
-            0, NULL             // constrained data ranges
+            &KSCATEGORY_AUDIO,
+            &KSNODETYPE_MICROPHONE,
+            0                   // Reserved
         }
     }
 };
 
 // свойства фильтра (пусто), узлов нет
+// PCFILTER_DESCRIPTOR: {Version, AutomationTable, PinSize, PinCount, Pins,
+//                       NodeSize, NodeCount, Nodes,
+//                       ConnectionCount, Connections, CategoryCount, Categories}
 static PCFILTER_DESCRIPTOR MiniportFilterWaveRt =
 {
     0,                      // Version
@@ -116,16 +121,14 @@ static PCFILTER_DESCRIPTOR MiniportFilterWaveRt =
     SIZEOF_ARRAY(WavePinDescriptors),
     WavePinDescriptors,
     0, 0, NULL,             // nodes (нет)
-    0, NULL,                // filter properties (нет)
-    0, NULL,                // methods (нет)
-    0, NULL,                // events (нет)
     0, NULL,                // connections (нет — один пин)
+    0, NULL                 // categories (нет)
 };
 
 // =========================== CMiniportWaveRT ================================
 
 CMiniportWaveRT::CMiniportWaveRT(_In_ PUNKNOWN OuterUnknown) :
-    CUnknown("MiniportWaveRT", OuterUnknown)
+    CUnknown(OuterUnknown)
 {
     m_Format.wFormatTag = WAVE_FORMAT_PCM;
     m_Format.nChannels = 1;
@@ -145,6 +148,30 @@ CMiniportWaveRT::~CMiniportWaveRT()
     if (m_Port) m_Port->Release();
 }
 
+STDMETHODIMP_(NTSTATUS)
+CMiniportWaveRT::NonDelegatingQueryInterface(_In_ REFIID Interface, _COM_Outptr_ PVOID* Object)
+{
+    ASSERT(Object);
+    if (!Object) return STATUS_INVALID_PARAMETER;
+
+    if (IsEqualGUIDAligned(Interface, IID_IUnknown))
+    {
+        *Object = (PVOID)(PUNKNOWN)(IMiniportWaveRT*)this;
+        ((PUNKNOWN)*Object)->AddRef();
+    }
+    else if (IsEqualGUIDAligned(Interface, IID_IMiniportWaveRT))
+    {
+        *Object = (PVOID)(IMiniportWaveRT*)this;
+        ((PUNKNOWN)(IMiniportWaveRT*)this)->AddRef();
+    }
+    else
+    {
+        *Object = nullptr;
+        return CUnknown::NonDelegatingQueryInterface(Interface, Object);
+    }
+    return STATUS_SUCCESS;
+}
+
 NTSTATUS CMiniportWaveRT::Create(
     _Outptr_ PUNKNOWN* Unknown,
     _In_ REFCLSID Clsid,
@@ -161,43 +188,46 @@ NTSTATUS CMiniportWaveRT::Create(
     return STATUS_SUCCESS;
 }
 
-IMP_IMiniportWaveRT::GetDeviceDescription(
-    _Out_ PDEVICE_DESCRIPTION* DeviceDescription
-    )
+#pragma code_seg("PAGE")
+STDMETHODIMP_(NTSTATUS)
+CMiniportWaveRT::GetDeviceDescription(_Out_ PDEVICE_DESCRIPTION DeviceDescription)
 {
-    if (m_DeviceDescription == nullptr)
+    PAGED_CODE();
+    ASSERT(DeviceDescription);
+    if (!DeviceDescription) return STATUS_INVALID_PARAMETER;
+
+    if (m_DeviceDescription.Master == FALSE)
     {
-        m_DeviceDescription = (PDEVICE_DESCRIPTION)ExAllocatePool2(
-            POOL_FLAG_NON_PAGED, sizeof(DEVICE_DESCRIPTION), PHONEMIC_TAG_GEN);
-        if (m_DeviceDescription == nullptr) return STATUS_INSUFFICIENT_RESOURCES;
-        RtlZeroMemory(m_DeviceDescription, sizeof(DEVICE_DESCRIPTION));
-        m_DeviceDescription->Master = TRUE;
-        m_DeviceDescription->ScatterGather = TRUE;
-        m_DeviceDescription->Dma32BitAddresses = TRUE;
-        m_DeviceDescription->Dma64BitAddresses = TRUE;
-        m_DeviceDescription->BusNumber = 0;
-        m_DeviceDescription->MaximumLength = PHONEMIC_MAX_WAVERT_BUFFER;
+        RtlZeroMemory(&m_DeviceDescription, sizeof(DEVICE_DESCRIPTION));
+        m_DeviceDescription.Master = TRUE;
+        m_DeviceDescription.ScatterGather = TRUE;
+        m_DeviceDescription.Dma32BitAddresses = TRUE;
+        m_DeviceDescription.Dma64BitAddresses = TRUE;
+        m_DeviceDescription.BusNumber = 0;
+        m_DeviceDescription.MaximumLength = PHONEMIC_MAX_WAVERT_BUFFER;
     }
-    *DeviceDescription = m_DeviceDescription;
+    RtlCopyMemory(DeviceDescription, &m_DeviceDescription, sizeof(DEVICE_DESCRIPTION));
     return STATUS_SUCCESS;
 }
 
-IMP_IMiniportWaveRT::DataRangeIntersection(
+STDMETHODIMP_(NTSTATUS)
+CMiniportWaveRT::DataRangeIntersection(
     _In_ ULONG PinId,
     _In_ PKSDATARANGE ClientDataRange,
     _In_ PKSDATARANGE MiniportDataRange,
     _In_ ULONG OutputBufferLength,
-    _Out_writes_bytes_to_opt_(OutputBufferLength, *ResultantFormatSize) PVOID ResultantFormat,
-    _Out_ PULONG ResultantFormatSize
+    _Out_writes_bytes_to_opt_(OutputBufferLength, *ResultantFormatLength) PVOID ResultantFormat,
+    _Out_ PULONG ResultantFormatLength
     )
 {
     UNREFERENCED_PARAMETER(PinId);
     UNREFERENCED_PARAMETER(ClientDataRange);
     UNREFERENCED_PARAMETER(MiniportDataRange);
+    PAGED_CODE();
 
     // фикс-формат: 48k/16/mono (движок сам ресемплит)
     ULONG size = sizeof(KSDATAFORMAT_WAVEFORMATEX);
-    *ResultantFormatSize = size;
+    *ResultantFormatLength = size;
     if (OutputBufferLength < size) return STATUS_BUFFER_OVERFLOW;
     if (ResultantFormat)
     {
@@ -206,19 +236,21 @@ IMP_IMiniportWaveRT::DataRangeIntersection(
     return STATUS_SUCCESS;
 }
 
-IMP_IMiniportWaveRT::GetDescription(
-    _Out_ PCFILTER_DESCRIPTOR** FilterDescriptor
-    )
+STDMETHODIMP_(NTSTATUS)
+CMiniportWaveRT::GetDescription(_Out_ PPCFILTER_DESCRIPTOR* FilterDescriptor)
 {
+    PAGED_CODE();
+    ASSERT(FilterDescriptor);
+    if (!FilterDescriptor) return STATUS_INVALID_PARAMETER;
     *FilterDescriptor = &MiniportFilterWaveRt;
     return STATUS_SUCCESS;
 }
 
-IMP_IMiniportWaveRT::Init(
+STDMETHODIMP_(NTSTATUS)
+CMiniportWaveRT::Init(
     _In_ PUNKNOWN UnknownAdapter,
     _In_ PRESOURCELIST ResourceList,
-    _In_ PPORTWAVERT Port,
-    _Out_ PSERVICEGROUP* ServiceGroup
+    _In_ PPORTWAVERT Port
     )
 {
     UNREFERENCED_PARAMETER(UnknownAdapter);
@@ -234,14 +266,12 @@ IMP_IMiniportWaveRT::Init(
     {
         m_Port->RegisterServiceGroup(m_ServiceGroup);
     }
-    *ServiceGroup = m_ServiceGroup;
-    if (m_ServiceGroup) m_ServiceGroup->AddRef();
-
     return STATUS_SUCCESS;
 }
 
-IMP_IMiniportWaveRT::NewStream(
-    _Out_ PIMiniportWaveRTStream* Stream,
+STDMETHODIMP_(NTSTATUS)
+CMiniportWaveRT::NewStream(
+    _Out_ PMINIPORTWAVERTSTREAM* Stream,
     _In_ PPORTWAVERTSTREAM PortStream,
     _In_ ULONG Pin,
     _In_ BOOLEAN Capture,
@@ -250,6 +280,8 @@ IMP_IMiniportWaveRT::NewStream(
 {
     UNREFERENCED_PARAMETER(Pin);
     PAGED_CODE();
+
+    if (!Stream || !PortStream) return STATUS_INVALID_PARAMETER;
 
     if (!Capture)
     {
@@ -264,7 +296,7 @@ IMP_IMiniportWaveRT::NewStream(
         wf->wFormatTag == WAVE_FORMAT_PCM &&
         wf->nChannels == 1 &&
         wf->wBitsPerSample == 16 &&
-        (wf->nSamplesPerSec == 48000 || wf->nSamplesPerSec == 44100))
+        wf->nSamplesPerSec == PHONEMIC_SAMPLE_RATE)
     {
         m_Format = *wf;
     }
@@ -274,8 +306,7 @@ IMP_IMiniportWaveRT::NewStream(
 
     CMiniportWaveRTStream* stream = nullptr;
     NTSTATUS ntStatus = CMiniportWaveRTStream::Create(
-        (PUNKNOWN*)&stream,
-        GUID_NULL, NonPagedPoolNx, nullptr, this, PortStream, Capture);
+        &stream, this, PortStream, Capture, nullptr);
     if (!NT_SUCCESS(ntStatus)) return ntStatus;
 
     ntStatus = stream->Init(this, PortStream, Capture);
@@ -286,14 +317,10 @@ IMP_IMiniportWaveRT::NewStream(
     }
 
     m_Stream = stream;
-    *Stream = (PIMiniportWaveRTStream)stream;   // передача ссылки
+    *Stream = (PMINIPORTWAVERTSTREAM)stream;   // передача ссылки
     return STATUS_SUCCESS;
 }
-
-IMP_IMiniportWaveRT::Service(VOID)
-{
-    return STATUS_SUCCESS;
-}
+#pragma code_seg()
 
 // =========================== фабрика минипорта ==============================
 

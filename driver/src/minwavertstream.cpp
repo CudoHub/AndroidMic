@@ -2,9 +2,8 @@
 PhoneMic driver: реализация потока WaveRT.
 Аудио цикл: DPC каждые 5 мс копирует PCM из кольца (IOCTL) в WaveRT-циклический
 буфер, двигает position/clock-регистры, сигнализирует notification events.
-Точку выделения буфера держим в ОДНОЙ функции (AllocateWaveRtBuffer) — сигнатуры
-IPortWaveRTStream различаются между версиями WDK, при сборке правится только она
-(см. docs/DRIVER_BUILD.md, раздел «Известные правки»).
+Реализованы ВСЕ чистые методы IMiniportWaveRTStream и
+IMiniportWaveRTStreamNotification (по portcls.h 26100).
 --*/
 #include "common.h"
 #include "adapter.h"
@@ -17,7 +16,7 @@ extern "C" VOID PhonemicStreamDpc(_In_ PKDPC Dpc, _In_opt_ PVOID context, _In_op
 // =========================== CMiniportWaveRTStream ==========================
 
 CMiniportWaveRTStream::CMiniportWaveRTStream(_In_ PUNKNOWN OuterUnknown) :
-    CUnknown("MiniportWaveRTStream", OuterUnknown)
+    CUnknown(OuterUnknown)
 {
     KeInitializeTimer(&m_Timer);
     KeInitializeDpc(&m_Dpc, PhonemicStreamDpc, this);
@@ -30,6 +29,15 @@ CMiniportWaveRTStream::~CMiniportWaveRTStream()
     if (m_PortStream) m_PortStream->Release();
     if (m_Parent) m_Parent->SetStream(nullptr);
 
+    // снимаем наши ссылки на event-объекты
+    for (ULONG i = 0; i < m_EventCount; i++)
+    {
+        if (m_NotificationEvents[i].Event)
+            ObDereferenceObject(m_NotificationEvents[i].Event);
+    }
+    RtlZeroMemory(m_NotificationEvents, sizeof(m_NotificationEvents));
+    m_EventCount = 0;
+
     // поток умирает — считаем захват неактивным
     InterlockedExchange(&g_CaptureStreamActive, 0);
     if (m_PreviousTimerResolution)
@@ -39,26 +47,53 @@ CMiniportWaveRTStream::~CMiniportWaveRTStream()
     }
 }
 
+STDMETHODIMP_(NTSTATUS)
+CMiniportWaveRTStream::NonDelegatingQueryInterface(_In_ REFIID Interface, _COM_Outptr_ PVOID* Object)
+{
+    ASSERT(Object);
+    if (!Object) return STATUS_INVALID_PARAMETER;
+
+    if (IsEqualGUIDAligned(Interface, IID_IUnknown))
+    {
+        *Object = (PVOID)(PUNKNOWN)(IMiniportWaveRTStream*)this;
+        ((PUNKNOWN)*Object)->AddRef();
+    }
+    else if (IsEqualGUIDAligned(Interface, IID_IMiniportWaveRTStream))
+    {
+        *Object = (PVOID)(IMiniportWaveRTStream*)this;
+        ((PUNKNOWN)(IMiniportWaveRTStream*)this)->AddRef();
+    }
+    else if (IsEqualGUIDAligned(Interface, IID_IMiniportWaveRTStreamNotification))
+    {
+        *Object = (PVOID)(IMiniportWaveRTStreamNotification*)this;
+        ((PUNKNOWN)(IMiniportWaveRTStreamNotification*)this)->AddRef();
+    }
+    else
+    {
+        *Object = nullptr;
+        return CUnknown::NonDelegatingQueryInterface(Interface, Object);
+    }
+    return STATUS_SUCCESS;
+}
+
 NTSTATUS CMiniportWaveRTStream::Create(
-    _Outptr_ PUNKNOWN* Unknown,
-    _In_ REFCLSID Clsid,
-    _In_ POOL_TYPE PoolType,
-    _In_ PUNKNOWN OuterUnknown,
+    _Out_ CMiniportWaveRTStream** Stream,
     _In_ CMiniportWaveRT* parent,
     _In_ PPORTWAVERTSTREAM portStream,
-    _In_ BOOLEAN capture)
+    _In_ BOOLEAN capture,
+    _In_ PUNKNOWN OuterUnknown)
 {
-    UNREFERENCED_PARAMETER(Clsid);
-    UNREFERENCED_PARAMETER(PoolType);
-    UNREFERENCED_PARAMETER(capture);
+    if (!Stream || !portStream) return STATUS_INVALID_PARAMETER;
 
-    CMiniportWaveRTStream* obj = new (NonPagedPoolNx, PHONEMIC_TAG_GEN) CMiniportWaveRTStream(OuterUnknown);
+    CMiniportWaveRTStream* obj =
+        new (NonPagedPoolNx, PHONEMIC_TAG_GEN) CMiniportWaveRTStream(OuterUnknown);
     if (obj == nullptr) return STATUS_INSUFFICIENT_RESOURCES;
     obj->AddRef();
     obj->m_Parent = parent;
     obj->m_PortStream = portStream;
+    obj->m_Capture = capture;
     portStream->AddRef();
-    *Unknown = (PUNKNOWN)(IMiniportWaveRTStream*)obj;
+    *Stream = obj;
     return STATUS_SUCCESS;
 }
 
@@ -67,10 +102,10 @@ NTSTATUS CMiniportWaveRTStream::Init(
     _In_ PPORTWAVERTSTREAM portStream,
     _In_ BOOLEAN capture)
 {
+    UNREFERENCED_PARAMETER(parent);
     UNREFERENCED_PARAMETER(portStream);
+    UNREFERENCED_PARAMETER(capture);
     PAGED_CODE();
-    m_Parent = parent;
-    m_Capture = capture;
 
     // non-cached страница регистров (position register обязан быть вне кэша)
     m_Registers = (PPHONEMIC_REGISTERS)MmAllocateNonCachedMemory(sizeof(PHONEMIC_REGISTERS));
@@ -82,16 +117,7 @@ NTSTATUS CMiniportWaveRTStream::Init(
 }
 
 // --------------------------- выделение буфера ------------------------------
-/*
- * ВНИМАНИЕ (WDK-совместимость): ниже — единственное место, где используется
- * IPortWaveRTStream::AllocateContiguousPhysicalMemory / MapAllocatedPagesToUserMode.
- * Если в вашей версии WDK сигнатуры иные — поправьте ТОЛЬКО этот блок:
- *   вариант A (порт-хелперы, как в sysvad):
- *       m_PortStream->AllocateContiguousPhysicalMemory(size, &phys, &sysVa, &mdl);
- *       userVa = m_PortStream->MapAllocatedPagesToUserMode(mdl, MmCached);
- *   вариант B (без хелперов порта, включён по умолчанию): свой пул + MDL,
- *       user-маппинг делает PortCls при обработке KSPROPERTY_RTAUDIO_BUFFER.
- */
+
 NTSTATUS CMiniportWaveRTStream::AllocateWaveRtBuffer(_In_ ULONG requestedSize)
 {
     PAGED_CODE();
@@ -154,9 +180,34 @@ VOID CMiniportWaveRTStream::FreeWaveRtBuffer()
     m_BufferSize = 0;
 }
 
-// ------------------------------ SetState -----------------------------------
+// ---------------------- IMiniportWaveRTStream -------------------------------
 
-IMP_IMiniportWaveRTStream::SetState(_In_ KSSTATE State)
+#pragma code_seg("PAGE")
+STDMETHODIMP_(NTSTATUS)
+CMiniportWaveRTStream::SetFormat(_In_ PKSDATAFORMAT DataFormat)
+{
+    PAGED_CODE();
+    if (DataFormat == nullptr) return STATUS_INVALID_PARAMETER;
+
+    // движок работает в фикс-формате 48к/16/mono — остальное отклоняем
+    if (DataFormat->FormatSize >= sizeof(KSDATAFORMAT_WAVEFORMATEX) &&
+        IsEqualGUIDAligned(DataFormat->MajorFormat, KSDATAFORMAT_TYPE_AUDIO) &&
+        IsEqualGUIDAligned(DataFormat->SubFormat, KSDATAFORMAT_SUBTYPE_PCM))
+    {
+        PWAVEFORMATEX wf = &((PKSDATAFORMAT_WAVEFORMATEX)DataFormat)->WaveFormatEx;
+        if (wf->wFormatTag == WAVE_FORMAT_PCM &&
+            wf->nChannels == 1 &&
+            wf->wBitsPerSample == 16 &&
+            wf->nSamplesPerSec == PHONEMIC_SAMPLE_RATE)
+        {
+            return STATUS_SUCCESS;
+        }
+    }
+    return STATUS_INVALID_DEVICE_REQUEST;
+}
+
+STDMETHODIMP_(NTSTATUS)
+CMiniportWaveRTStream::SetState(_In_ KSSTATE State)
 {
     PAGED_CODE();
 
@@ -198,55 +249,168 @@ IMP_IMiniportWaveRTStream::SetState(_In_ KSSTATE State)
     return STATUS_SUCCESS;
 }
 
-// ------------------------------ регистры -----------------------------------
-
-IMP_IMiniportWaveRTStream::GetClockRegister(_Out_ PKSRTAUDIO_HWREGISTER Register)
+STDMETHODIMP_(NTSTATUS)
+CMiniportWaveRTStream::GetPosition(_Out_ PKSAUDIO_POSITION Position)
 {
-    Register->Register = (PVOID)&m_Registers->ClockQpc;
-    Register->Width = 64;
-    Register->Precision = 64;
-    Register->Flags = KSRTAUDIO_HWREGISTER_TIME | KSRTAUDIO_HWREGISTER_POSITION;
-    return STATUS_SUCCESS;
-}
-
-IMP_IMiniportWaveRTStream::GetPositionRegister(_Out_ PKSRTAUDIO_HWREGISTER Register)
-{
-    Register->Register = (PVOID)&m_Registers->Position;
-    Register->Width = 32;
-    Register->Precision = 32;
-    Register->Flags = KSRTAUDIO_HWREGISTER_POSITION;
-    return STATUS_SUCCESS;
-}
-
-// ---------------------- notification buffer (IMiniport...Notification) -----
-
-IMP_IMiniportWaveRTStreamNotification::AllocateBufferWithNotification(
-    _In_ ULONG RequestedSize,
-    _Deref_out_ PMDL* AudioBufferMdl,
-    _Deref_out_ PVOID* AudioBufferVirtualAddress,
-    _Deref_out_ ULONG* ActualSize,
-    _Out_ BOOLEAN* FromPool,
-    _Out_ BOOLEAN* Cached)
-{
-    UNREFERENCED_PARAMETER(Cached);
     PAGED_CODE();
+    ASSERT(Position);
+    if (!Position) return STATUS_INVALID_PARAMETER;
+    ULONG pos = (ULONG)(m_TotalPosition % max(m_BufferSize, 1));
+    Position->PlayOffset = pos;
+    Position->WriteOffset = pos;
+    return STATUS_SUCCESS;
+}
+
+STDMETHODIMP_(NTSTATUS)
+CMiniportWaveRTStream::AllocateAudioBuffer(
+    _In_ ULONG RequestedSize,
+    _Out_ PMDL* AudioBufferMdl,
+    _Out_ ULONG* ActualSize,
+    _Out_ ULONG* OffsetFromFirstPage,
+    _Out_ MEMORY_CACHING_TYPE* CacheType
+    )
+{
+    PAGED_CODE();
+    ASSERT(AudioBufferMdl && ActualSize && OffsetFromFirstPage && CacheType);
+    if (!AudioBufferMdl || !ActualSize || !OffsetFromFirstPage || !CacheType)
+        return STATUS_INVALID_PARAMETER;
 
     NTSTATUS ntStatus = AllocateWaveRtBuffer(RequestedSize);
     if (!NT_SUCCESS(ntStatus)) return ntStatus;
 
     *AudioBufferMdl = m_BufferMdl;
-    *AudioBufferVirtualAddress = m_SystemAddress;
     *ActualSize = m_BufferSize;
-    *FromPool = TRUE;
+    *OffsetFromFirstPage = 0;
+    *CacheType = MmCached;
     return STATUS_SUCCESS;
 }
 
-IMP_IMiniportWaveRTStreamNotification::FreeBufferWithNotification()
+STDMETHODIMP_(VOID)
+CMiniportWaveRTStream::FreeAudioBuffer(
+    _In_opt_ PMDL AudioBufferMdl,
+    _In_ ULONG BufferSize
+    )
 {
+    UNREFERENCED_PARAMETER(AudioBufferMdl);
+    UNREFERENCED_PARAMETER(BufferSize);
     PAGED_CODE();
     FreeWaveRtBuffer();
+}
+
+STDMETHODIMP_(NTSTATUS)
+CMiniportWaveRTStream::GetHWLatency(_Out_ KSRTAUDIO_HWLATENCY* hwLatency)
+{
+    PAGED_CODE();
+    ASSERT(hwLatency);
+    if (!hwLatency) return STATUS_INVALID_PARAMETER;
+    hwLatency->FifoSize = 0;
+    hwLatency->ChipsetDelay = 0;
+    hwLatency->CodecDelay = 0;
     return STATUS_SUCCESS;
 }
+
+STDMETHODIMP_(NTSTATUS)
+CMiniportWaveRTStream::GetPositionRegister(_Out_ KSRTAUDIO_HWREGISTER* Register)
+{
+    PAGED_CODE();
+    ASSERT(Register && m_Registers);
+    if (!Register || !m_Registers) return STATUS_INVALID_PARAMETER;
+    Register->Register = (PVOID)&m_Registers->Position;
+    Register->Width = 32;
+    Register->Numerator = 1;
+    Register->Denominator = 1;
+    Register->Accuracy = 0;
+    return STATUS_SUCCESS;
+}
+
+STDMETHODIMP_(NTSTATUS)
+CMiniportWaveRTStream::GetClockRegister(_Out_ KSRTAUDIO_HWREGISTER* Register)
+{
+    PAGED_CODE();
+    ASSERT(Register && m_Registers);
+    if (!Register || !m_Registers) return STATUS_INVALID_PARAMETER;
+    Register->Register = (PVOID)&m_Registers->ClockQpc;
+    Register->Width = 64;
+    Register->Numerator = 1;
+    Register->Denominator = 1;
+    Register->Accuracy = 0;
+    return STATUS_SUCCESS;
+}
+
+// ---------------- IMiniportWaveRTStreamNotification -------------------------
+
+STDMETHODIMP_(NTSTATUS)
+CMiniportWaveRTStream::AllocateBufferWithNotification(
+    _In_ ULONG NotificationCount,
+    _In_ ULONG RequestedSize,
+    _Out_ PMDL* AudioBufferMdl,
+    _Out_ ULONG* ActualSize,
+    _Out_ ULONG* OffsetFromFirstPage,
+    _Out_ MEMORY_CACHING_TYPE* CacheType
+    )
+{
+    PAGED_CODE();
+    ASSERT(AudioBufferMdl && ActualSize && OffsetFromFirstPage && CacheType);
+    if (!AudioBufferMdl || !ActualSize || !OffsetFromFirstPage || !CacheType)
+        return STATUS_INVALID_PARAMETER;
+
+    NTSTATUS ntStatus = AllocateWaveRtBuffer(RequestedSize);
+    if (!NT_SUCCESS(ntStatus)) return ntStatus;
+
+    if (NotificationCount) m_NotificationCount = NotificationCount;
+    *AudioBufferMdl = m_BufferMdl;
+    *ActualSize = m_BufferSize;
+    *OffsetFromFirstPage = 0;
+    *CacheType = MmCached;
+    return STATUS_SUCCESS;
+}
+
+STDMETHODIMP_(VOID)
+CMiniportWaveRTStream::FreeBufferWithNotification(
+    _In_ PMDL AudioBufferMdl,
+    _In_ ULONG BufferSize
+    )
+{
+    UNREFERENCED_PARAMETER(AudioBufferMdl);
+    UNREFERENCED_PARAMETER(BufferSize);
+    PAGED_CODE();
+    m_NotificationCount = 0;
+    FreeWaveRtBuffer();
+}
+
+STDMETHODIMP_(NTSTATUS)
+CMiniportWaveRTStream::RegisterNotificationEvent(_In_ PKEVENT NotificationEvent)
+{
+    PAGED_CODE();
+    if (!NotificationEvent) return STATUS_INVALID_PARAMETER;
+    // порт сохраняет свою ссылку; заводим собственную на время жизни потока
+    ObReferenceObject(NotificationEvent);
+    NTSTATUS ntStatus = AddNotificationEvent(NotificationEvent);
+    if (!NT_SUCCESS(ntStatus)) ObDereferenceObject(NotificationEvent);
+    return ntStatus;
+}
+
+STDMETHODIMP_(NTSTATUS)
+CMiniportWaveRTStream::UnregisterNotificationEvent(_In_ PKEVENT NotificationEvent)
+{
+    PAGED_CODE();
+    if (!NotificationEvent) return STATUS_INVALID_PARAMETER;
+
+    for (ULONG i = 0; i < m_EventCount; i++)
+    {
+        if (m_NotificationEvents[i].Event == NotificationEvent)
+        {
+            ObDereferenceObject(m_NotificationEvents[i].Event);
+            for (ULONG j = i; j + 1 < m_EventCount; j++)
+                m_NotificationEvents[j] = m_NotificationEvents[j + 1];
+            m_EventCount--;
+            RtlZeroMemory(&m_NotificationEvents[m_EventCount], sizeof(m_NotificationEvents[0]));
+            return STATUS_SUCCESS;
+        }
+    }
+    return STATUS_NOT_FOUND;
+}
+#pragma code_seg()
 
 // ------------------------------ DPC ----------------------------------------
 
@@ -302,9 +466,9 @@ VOID CMiniportWaveRTStream::DpcTick()
     m_TotalPosition += periodBytes;
 
     // 2. регистры
-    ULONG64 qpc = KeQueryInterruptTimePrecise(nullptr);
-    if (qpc == 0) qpc = KeQueryInterruptTime();
-    m_Registers->ClockQpc = qpc;
+    ULONGLONG qpcTimeStamp = 0;
+    (VOID)KeQueryInterruptTimePrecise(&qpcTimeStamp);
+    m_Registers->ClockQpc = qpcTimeStamp;
     m_Registers->ClockPosition = (ULONG)(m_TotalPosition % m_BufferSize);
     m_Registers->Position = (ULONG)(m_TotalPosition % m_BufferSize);
 
@@ -323,6 +487,7 @@ VOID CMiniportWaveRTStream::DpcTick()
 
 // ------------------------------ события ------------------------------------
 
+// Принимает владение ссылкой на event (вызвавший уже ObReferenceObject)
 NTSTATUS CMiniportWaveRTStream::AddNotificationEvent(_In_ PKEVENT event)
 {
     if (m_EventCount >= RTL_NUMBER_OF(m_NotificationEvents)) return STATUS_INSUFFICIENT_RESOURCES;
@@ -334,6 +499,7 @@ NTSTATUS CMiniportWaveRTStream::AddNotificationEvent(_In_ PKEVENT event)
     return STATUS_SUCCESS;
 }
 
+// Путь из property-обработчика: хэндл -> объект, сверяем по объекту
 NTSTATUS CMiniportWaveRTStream::RemoveNotificationEvent(_In_ HANDLE userHandle)
 {
     // сопоставляем пользовательский хэндл через второй ObReference

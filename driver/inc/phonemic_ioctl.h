@@ -4,8 +4,9 @@ PhoneMic Virtual Microphone driver — IOCTL interface.
 --*/
 #pragma once
 
-#include <initguid.h>
 #include <guiddef.h>
+// ВНИМАНИЕ: initguid.h здесь НЕ включаем (определения GUID — только в src/guids.cpp),
+// иначе каждый .obj определит GUID_DEVINTERFACE_PHONEMIC и получим LNK2005.
 
 // {7C0A9E52-3B14-4D6F-9A8B-2E5C1D3F7A01}
 DEFINE_GUID(GUID_DEVINTERFACE_PHONEMIC,

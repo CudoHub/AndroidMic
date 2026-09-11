@@ -50,7 +50,9 @@ static NTSTATUS HandleRtAudioBuffer(PPCPROPERTY_REQUEST req, BOOLEAN withNotific
             requestedSize = bp->RequestedBufferSize;
     }
     UNREFERENCED_PARAMETER(withNotification);
-    // NotificationCount (если пришёл) игнорируем: события сигнализируются каждый период
+    // NotificationCount приходит во ВХОДНОЙ KSRTAUDIO_BUFFER_PROPERTY_WITH_NOTIFICATION;
+    // ОТВЕТ для обоих свойств — KSRTAUDIO_BUFFER (структуры *_WITH_NOTIFICATION
+    // для ответа в ksmedia.h нет)
 
     NTSTATUS status = stream->AllocateWaveRtBuffer(requestedSize);
     if (!NT_SUCCESS(status)) return status;
@@ -60,9 +62,9 @@ static NTSTATUS HandleRtAudioBuffer(PPCPROPERTY_REQUEST req, BOOLEAN withNotific
     if (userVa == nullptr) return STATUS_UNSUCCESSFUL;
 
     KSRTAUDIO_BUFFER out;
-    out.CacheOk = TRUE;
     out.BufferAddress = userVa;
     out.ActualBufferSize = actual;
+    out.CallMemoryBarrier = FALSE;   // кэшируемая память
     return Reply(req, &out, sizeof(out));
 }
 
@@ -71,7 +73,7 @@ static NTSTATUS HandleRtAudioBuffer(PPCPROPERTY_REQUEST req, BOOLEAN withNotific
 static NTSTATUS HandleRtAudioHwLatency(PPCPROPERTY_REQUEST req)
 {
     KSRTAUDIO_HWLATENCY out;
-    out.FIFOSize = 0;
+    out.FifoSize = 0;
     out.ChipsetDelay = 0;
     out.CodecDelay = 0;
     return Reply(req, &out, sizeof(out));
@@ -83,8 +85,13 @@ static NTSTATUS HandleRtAudioPositionRegister(PPCPROPERTY_REQUEST req)
 {
     CMiniportWaveRTStream* stream = GetStream(req);
     if (stream == nullptr) return STATUS_INVALID_DEVICE_REQUEST;
-    KSRTAUDIO_POSITIONREGISTER out;
+    // значение KSPROPERTY_RTAUDIO_POSITIONREGISTER = KSRTAUDIO_HWREGISTER
+    KSRTAUDIO_HWREGISTER out;
     out.Register = (PVOID)stream->GetPositionRegisterPtr();
+    out.Width = 32;
+    out.Numerator = 1;
+    out.Denominator = 1;
+    out.Accuracy = 0;
     return Reply(req, &out, sizeof(out));
 }
 
@@ -97,8 +104,9 @@ static NTSTATUS HandleRtAudioClockRegister(PPCPROPERTY_REQUEST req)
     KSRTAUDIO_HWREGISTER out;
     out.Register = (PVOID)stream->GetClockRegisterPtr();
     out.Width = 64;
-    out.Precision = 64;
-    out.Flags = KSRTAUDIO_HWREGISTER_TIME | KSRTAUDIO_HWREGISTER_POSITION;
+    out.Numerator = 1;
+    out.Denominator = 1;
+    out.Accuracy = 0;
     return Reply(req, &out, sizeof(out));
 }
 
@@ -140,14 +148,14 @@ static NTSTATUS HandleNotificationEvent(PPCPROPERTY_REQUEST req, BOOLEAN registe
 NTSTATUS CMiniportWaveRT::PropertyHandlerRtAudio(PPCPROPERTY_REQUEST req)
 {
     PAGED_CODE();
-    if (req == nullptr || req->Property == nullptr) return STATUS_INVALID_PARAMETER;
+    if (req == nullptr || req->PropertyItem == nullptr) return STATUS_INVALID_PARAMETER;
 
-    ULONG id = req->Property->Id;
+    ULONG id = req->PropertyItem->Id;
 
     // базовая поддержка — стандартная
     if (req->Verb & KSPROPERTY_TYPE_BASICSUPPORT)
     {
-        return PcPropertyHandlerBasicSupport(req);
+        return PhonemicPropertyBasicSupport(req);
     }
 
     if (req->Verb & KSPROPERTY_TYPE_GET)
@@ -190,7 +198,7 @@ NTSTATUS CMiniportWaveRT::PropertyHandlerProposeDataFormat(PPCPROPERTY_REQUEST r
     PAGED_CODE();
     if (req->Verb & KSPROPERTY_TYPE_BASICSUPPORT)
     {
-        return PcPropertyHandlerBasicSupport(req);
+        return PhonemicPropertyBasicSupport(req);
     }
     if (req->Verb & KSPROPERTY_TYPE_SET)
     {

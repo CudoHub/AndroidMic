@@ -10,17 +10,13 @@ class CMiniportTopology :
     public CUnknown
 {
 public:
-    DECLARE_USING_UNKNOWN()
+    DECLARE_STD_UNKNOWN()
 
     CMiniportTopology(_In_ PUNKNOWN OuterUnknown);
     ~CMiniportTopology();
 
-    // IMiniport
-    IMP_IMiniport(GetDeviceDescription);
-    // IMiniportTopology
-    IMP_IMiniportTopology(DataRangeIntersection);
-    IMP_IMiniportTopology(GetDescription);
-    IMP_IMiniportTopology(Init);
+    // IMiniportTopology = IMiniport (GetDescription, DataRangeIntersection) + Init
+    IMP_IMiniportTopology
 
     // фабрика
     static NTSTATUS Create(
@@ -31,7 +27,4 @@ public:
 
     // обработчики свойств узлов (volume/mute)
     static NTSTATUS PropertyHandlerTopo(PPCPROPERTY_REQUEST PropertyRequest);
-
-protected:
-    PDEVICE_DESCRIPTION m_DeviceDescription = nullptr;
 };

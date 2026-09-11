@@ -3,9 +3,12 @@ PhoneMic driver: общие определения.
 --*/
 #pragma once
 
-#include <initguid.h>
+// ВАЖНО: initguid.h сюда включать НЕЛЬЗЯ — он раскрывает все DEFINE_GUID в
+// определения, и каждый .obj получит свои копии GUID (LNK2005). Единственное
+// ТУ с определениями — src/guids.cpp.
 #include <ntddk.h>
 #include <portcls.h>
+#include <stdunk.h>     // CUnknown, DECLARE_STD_UNKNOWN, операторы new/delete
 #include <ks.h>
 #include <ksmedia.h>
 #include <wdm.h>
@@ -44,6 +47,10 @@ VOID PhonemicRingReset(VOID);
 ULONG PhonemicRingPull(_Out_writes_bytes_(maxBytes) PUCHAR dest, _In_ ULONG maxBytes);
 ULONG PhonemicRingBufferedBytes(VOID);
 VOID PhonemicRingCountUnderrun(VOID);
+
+// стандартный ответ BASICSUPPORT (реализован в mintopo.cpp; в WDK нет
+// PcPropertyHandlerBasicSupport — этот хелпер заменяет его)
+NTSTATUS PhonemicPropertyBasicSupport(_In_ PPCPROPERTY_REQUEST PropertyRequest);
 
 // счётчик активного потока захвата (0/1)
 extern LONG g_CaptureStreamActive;

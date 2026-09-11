@@ -63,6 +63,7 @@
   <ItemGroup>
     <ClCompile Include="src\adapter.cpp" />
     <ClCompile Include="src\control.cpp" />
+    <ClCompile Include="src\guids.cpp" />
     <ClCompile Include="src\minwavert.cpp" />
     <ClCompile Include="src\minwavertprops.cpp" />
     <ClCompile Include="src\minwavertstream.cpp" />

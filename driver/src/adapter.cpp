@@ -44,13 +44,15 @@ static NTSTATUS InstallSubdevice(
     ntStatus = PcNewPort(&unknownPort, PortClassId);
     if (!NT_SUCCESS(ntStatus)) goto Done;
 
-    ntStatus = MiniportCreate(&unknownMiniport, NULL, NonPagedPoolNx, NULL);
+    ntStatus = MiniportCreate(&unknownMiniport, GUID_NULL, NonPagedPoolNx, NULL);
     if (!NT_SUCCESS(ntStatus)) goto Done;
 
-    ntStatus = unknownPort->QueryInterface(IID_PPV_ARGS(&port));
+    // IID_PPV_ARGS в km-хедерах нет — явная форма QI
+    ntStatus = unknownPort->QueryInterface(IID_IPort, (PVOID*)&port);
     if (!NT_SUCCESS(ntStatus)) goto Done;
 
-    ntStatus = port->Init(DeviceObject, unknownMiniport, NULL, ResourceList, Irp);
+    // IPort::Init(DeviceObject, Irp, UnknownMiniport, UnknownAdapter, ResourceList)
+    ntStatus = port->Init(DeviceObject, Irp, unknownMiniport, NULL, ResourceList);
     if (!NT_SUCCESS(ntStatus)) goto Done;
 
     ntStatus = PcRegisterSubdevice(DeviceObject, (PWSTR)PortName, unknownPort);
@@ -128,8 +130,8 @@ Done:
 #pragma code_seg()
 
 // ------------------------------ DriverEntry --------------------------------
-
-extern "C" DRIVER_UNLOAD PhonemicUnload;
+// PhonemicUnload объявлен в adapter.h (DRIVER_UNLOAD); extern "C" здесь давал бы
+// конфликт линковки с объявлением в заголовке.
 
 _Use_decl_annotations_
 NTSTATUS DriverEntry(

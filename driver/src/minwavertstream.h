@@ -1,5 +1,5 @@
 /*++
-PhoneMic driver: поток WaveRT (IMiniportWaveRTStream + notification).
+PhoneMic driver: поток WaveRT (IMiniportWaveRTStream + IMiniportWaveRTStreamNotification).
 Буфер, DPC-таймер, позиция/часы, события уведомлений, подтягивание из кольца.
 --*/
 #pragma once
@@ -19,19 +19,20 @@ class CMiniportWaveRTStream :
     public CUnknown
 {
 public:
-    DECLARE_USING_UNKNOWN()
+    DECLARE_STD_UNKNOWN()
 
     CMiniportWaveRTStream(_In_ PUNKNOWN OuterUnknown);
     ~CMiniportWaveRTStream();
 
-    // IMiniportWaveRTStream
-    IMP_IMiniportWaveRTStream(SetState);
-    IMP_IMiniportWaveRTStream(GetClockRegister);
-    IMP_IMiniportWaveRTStream(GetPositionRegister);
+    // IMiniportWaveRTStream: SetFormat, SetState, GetPosition,
+    // AllocateAudioBuffer, FreeAudioBuffer, GetHWLatency,
+    // GetPositionRegister, GetClockRegister
+    IMP_IMiniportWaveRTStream
 
-    // IMiniportWaveRTStreamNotification
-    IMP_IMiniportWaveRTStreamNotification(AllocateBufferWithNotification);
-    IMP_IMiniportWaveRTStreamNotification(FreeBufferWithNotification);
+    // IMiniportWaveRTStreamNotification: AllocateBufferWithNotification,
+    // FreeBufferWithNotification, RegisterNotificationEvent,
+    // UnregisterNotificationEvent
+    IMP_IMiniportWaveRTStreamNotification
 
     // локальные методы
     NTSTATUS Init(_In_ CMiniportWaveRT* parent, _In_ PPORTWAVERTSTREAM portStream, _In_ BOOLEAN capture);
@@ -44,18 +45,17 @@ public:
     ULONG GetBufferSize() { return m_BufferSize; }
     volatile VOID* GetPositionRegisterPtr() { return &m_Registers->Position; }
     volatile VOID* GetClockRegisterPtr() { return &m_Registers->ClockQpc; }
-    NTSTATUS AddNotificationEvent(_In_ PKEVENT event);
+    ULONG GetNotificationCount() { return m_NotificationCount; }
+    NTSTATUS AddNotificationEvent(_In_ PKEVENT event);   // принимает владение ссылкой
     NTSTATUS RemoveNotificationEvent(_In_ HANDLE userHandle);
 
-    // фабрика
+    // фабрика (своя, не COM-стандартная)
     static NTSTATUS Create(
-        _Outptr_ PUNKNOWN* Unknown,
-        _In_ REFCLSID Clsid,
-        _In_ POOL_TYPE PoolType,
-        _In_ PUNKNOWN OuterUnknown,
+        _Out_ CMiniportWaveRTStream** Stream,
         _In_ CMiniportWaveRT* parent,
         _In_ PPORTWAVERTSTREAM portStream,
-        _In_ BOOLEAN capture);
+        _In_ BOOLEAN capture,
+        _In_ PUNKNOWN OuterUnknown);
 
 protected:
     CMiniportWaveRT* m_Parent = nullptr;

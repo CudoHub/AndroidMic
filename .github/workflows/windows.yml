@@ -35,6 +35,39 @@ jobs:
       - name: Test Core
         run: dotnet test windows-app/tests/PhoneMic.Core.Tests/PhoneMic.Core.Tests.csproj -c Release
 
+      - name: Restore App
+        run: dotnet restore windows-app/src/PhoneMic.App/PhoneMic.App.csproj
+
+      # Microsoft.UI.Xaml.Markup.Compiler.dll (tools/net6.0 в пакете WASDK) ссылается
+      # на System.Security.Permissions 6.0.0, которой в пакете НЕТ — in-proc загрузка
+      # задачи CompileXaml падает с MSB4062 (упаковочный баг WASDK). Подкладываем DLL
+      # рядом с задачей: источник — глобальный кэш NuGet (гарантирован PackageReference
+      # в csproj), фолбэк — nupkg с api.nuget.org.
+      - name: Patch WASDK XamlCompiler dependencies
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $wasdkRoot = "$env:USERPROFILE\.nuget\packages\microsoft.windowsappsdk"
+          $ver = (Get-ChildItem $wasdkRoot -Directory |
+                  Sort-Object -Property { [version]$_.Name } -Descending |
+                  Select-Object -First 1).Name
+          $dst = Join-Path $wasdkRoot "$ver\tools\net6.0"
+          if (-not (Test-Path $dst)) { throw "WASDK tools folder not found: $dst" }
+          $dll = "System.Security.Permissions.dll"
+          if (Test-Path (Join-Path $dst $dll)) { Write-Host "Already patched"; exit 0 }
+          $src = "$env:USERPROFILE\.nuget\packages\system.security.permissions\6.0.0\lib\net6.0\$dll"
+          if (-not (Test-Path $src)) {
+            Write-Host "Not in cache — downloading nupkg from nuget.org"
+            $zip = Join-Path $env:RUNNER_TEMP "ssp.zip"
+            Invoke-WebRequest -Uri 'https://api.nuget.org/v3-flatcontainer/system.security.permissions/6.0.0/system.security.permissions.6.0.0.nupkg' -OutFile $zip
+            $ext = Join-Path $env:RUNNER_TEMP "ssp"
+            Expand-Archive -Path $zip -DestinationPath $ext -Force
+            $src = Join-Path $ext "lib\net6.0\$dll"
+          }
+          Copy-Item $src $dst -Force
+          $copied = Get-Item (Join-Path $dst $dll)
+          Write-Host "Patched: $($copied.FullName) ($($copied.Length) bytes)"
+
       # UseXamlCompilerExecutable=false: XAML-компилятор запускается in-proc (net6.0),
       # а не как отдельный процесс. В exe-режиме при ошибке он молча выходит с кодом 1
       # (MSB3073 без текста), т.к. Exec гасит OutputDeserializer; in-proc печатает
@@ -109,7 +142,10 @@ jobs:
           $msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
             -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
           Write-Host "WindowsTargetPlatformVersion = $env:WTPV"
-          & $msbuild driver/phonemic.vcxproj /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=$env:WTPV /t:Build
+          # SkipPackageVerification: DPVerifierTask грузит x86\InfVerif.dll, которого
+          # нет в предустановленном на раннере WDK (обрезан образ) — проверку INF
+          # пропускаем (inf2cat .cat продолжает строиться).
+          & $msbuild driver/phonemic.vcxproj /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=$env:WTPV /p:SkipPackageVerification=true /t:Build
 
       - name: Package driver (sys/inf/cat)
         shell: pwsh

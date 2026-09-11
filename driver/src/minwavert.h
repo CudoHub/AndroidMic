@@ -1,5 +1,7 @@
 /*++
 PhoneMic driver: WaveRT capture miniport (IMiniportWaveRT).
+Соответствует portcls.h 26100: IMiniportWaveRT = IMiniport(GetDescription,
+DataRangeIntersection) + Init + NewStream + GetDeviceDescription.
 --*/
 #pragma once
 #include "common.h"
@@ -7,7 +9,7 @@ PhoneMic driver: WaveRT capture miniport (IMiniportWaveRT).
 class CMiniportWaveRTStream;
 
 //=============================================================================
-// Диапазоны данных capture-пина (48к/44.1к, 16 бит, mono)
+// Диапазоны данных capture-пина (48 кГц, 16 бит, mono — движок сам ресемплит)
 //=============================================================================
 static const KSDATARANGE_AUDIO PhonemicPinDataRangesAudio[] =
 {
@@ -24,8 +26,8 @@ static const KSDATARANGE_AUDIO PhonemicPinDataRangesAudio[] =
         1,                           // MaximumChannels (mono)
         16,                          // MinimumBitsPerSample
         16,                          // MaximumBitsPerSample
-        44100,                       // MinimumSampleFrequency
-        48000                        // MaximumSampleFrequency
+        48000,                       // MinimumSampleFrequency
+        48000                        // MaximumSampleFrequency (фикс — 48 кГц)
     },
 };
 
@@ -42,19 +44,14 @@ class CMiniportWaveRT :
     public CUnknown
 {
 public:
-    DECLARE_USING_UNKNOWN()
+    DECLARE_STD_UNKNOWN()
 
     CMiniportWaveRT(_In_ PUNKNOWN OuterUnknown);
     ~CMiniportWaveRT();
 
-    // IMiniport
-    IMP_IMiniport(GetDeviceDescription);
-    // IMiniportWaveRT
-    IMP_IMiniportWaveRT(DataRangeIntersection);
-    IMP_IMiniportWaveRT(GetDescription);
-    IMP_IMiniportWaveRT(Init);
-    IMP_IMiniportWaveRT(NewStream);
-    IMP_IMiniportWaveRT(Service);
+    // IMiniport + IMiniportWaveRT: GetDescription, DataRangeIntersection,
+    // Init, NewStream, GetDeviceDescription
+    IMP_IMiniportWaveRT
 
     // фабрика
     static NTSTATUS Create(
@@ -73,10 +70,10 @@ public:
     PWAVEFORMATEX GetFormat() { return &m_Format; }
 
 protected:
-    PDEVICE_DESCRIPTION m_DeviceDescription = nullptr;
     PPORTWAVERT m_Port = nullptr;
     PSERVICEGROUP m_ServiceGroup = nullptr;
     CMiniportWaveRTStream* m_Stream = nullptr;
+    DEVICE_DESCRIPTION m_DeviceDescription = {};
     WAVEFORMATEX m_Format = {};
 };
 

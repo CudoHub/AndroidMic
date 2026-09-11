@@ -24,6 +24,10 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
     <PackageReference Include="Concentus" Version="2.2.2" />
     <PackageReference Include="H.NotifyIcon.WinUI" Version="1.1.5" />
+    <!-- Сборочная зависимость in-proc XamlCompiler (tools/net6.0 WASDK не содержит
+         эту DLL, без неё MSB4062). Restore кладёт её в кэш, откуда CI-шаг
+         «Patch WASDK XamlCompiler dependencies» копирует её к задаче компилятора. -->
+    <PackageReference Include="System.Security.Permissions" Version="6.0.0" />
   </ItemGroup>
 
   <ItemGroup>

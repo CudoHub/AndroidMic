@@ -1,0 +1,13 @@
+{
+  // Пин .NET SDK: без global.json `dotnet` берёт САМЫЙ НОВЫЙ установленный SDK,
+  // а на windows-2022 это 9.0.317/10.0.400 — MSBuild 17.12+ там фейлит загрузку
+  // XamlCompiler (fallback в out-of-proc taskhost → MSB4061 "Type must be a type
+  // provided by the runtime" + MSB4027 "MetadataLoadContext ... has been disposed").
+  // WindowsAppSDK 1.6 поддерживает .NET 8; 8.0.4xx предустановлен на раннере.
+  // (JSONC-комментарии допускаются в global.json)
+  "sdk": {
+    "version": "8.0.400",
+    "rollForward": "latestFeature",
+    "allowPrerelease": false
+  }
+}

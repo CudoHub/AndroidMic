@@ -3,14 +3,14 @@ name: windows
 on:
   push:
     branches: [ main ]
-    paths: [ 'windows-app/**', 'driver/**', '.github/workflows/windows.yml' ]
+    paths: [ 'windows-app/**', 'driver/**', 'global.json', '.github/workflows/windows.yml' ]
   pull_request:
   workflow_dispatch:
 
 jobs:
   app:
-    # Фиксируем образ: windows-latest мигрировал на windows-2025 (VS 18).
-    # Пин на windows-2022 исключает дрейф окружения на время отладки сборки.
+    # Пин образа: windows-latest мигрировал на windows-2025 (VS 18) — дрейф окружения
+    # на время отладки сборки исключаем. windows-2022 = VS 2022 + .NET SDK 8.0.424.
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
@@ -20,11 +20,23 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      # ВАЖНО: global.json в корне репозитория пинует SDK на 8.0.4xx.
+      # Без него `dotnet publish` берёт САМЫЙ НОВЫЙ предустановленный SDK
+      # (на windows-2022 это 9.0.317/10.0.400), где MSBuild 17.12+ не может
+      # инстанцировать XamlCompiler: fallback в out-of-proc taskhost →
+      # MSB4061 "Type must be a type provided by the runtime" +
+      # MSB4027 "MetadataLoadContext ... has been disposed" — известная
+      # регрессия новых MSBuild. На MSBuild 17.11 (.NET 8 SDK) in-proc
+      # загрузка net6.0-задачи работает штатно.
+      - name: Show resolved SDK
+        shell: pwsh
+        run: dotnet --version
+
       - name: Test Core
         run: dotnet test windows-app/tests/PhoneMic.Core.Tests/PhoneMic.Core.Tests.csproj -c Release
 
       # UseXamlCompilerExecutable=false: XAML-компилятор запускается in-proc (net6.0),
-      # а не как net472-процесс. В exe-режиме при ошибке он молча выходит с кодом 1
+      # а не как отдельный процесс. В exe-режиме при ошибке он молча выходит с кодом 1
       # (MSB3073 без текста), т.к. Exec гасит OutputDeserializer; in-proc печатает
       # реальные WMC-ошибки прямо в лог MSBuild.
       - name: Publish WinUI 3 (unpackaged, self-contained)
@@ -61,47 +73,43 @@ jobs:
           path: artifacts/PhoneMic-win-x64.zip
 
   driver:
-    # Фиксируем образ: windows-latest мигрировал на windows-2025 (VS 18), где
-    # связка WDK 22621 + VS-интеграция сломана. windows-2022 = VS 2022 — проверенно.
+    # Пин образа: windows-latest мигрировал на windows-2025 (VS 18) — дрейф окружения
+    # на время отладки сборки исключаем. windows-2022 = VS 2022 — проверенно.
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
 
-      # winget на GitHub-раннерах отсутствует как класс — ставим тихо через
-      # официальные bootstrappers с aka.ms (ссылки проверены, HTTP 200).
-      - name: Install Windows SDK 10.0.22621.755
+      # WDK УЖЕ ПРЕДУСТАНОВЛЕН на образе windows-2022 (см. runner-images Windows2022-Readme.md):
+      #   Windows Driver Kit 10.1.26100.4202 + WDK VSIX 10.0.26100.16 (даёт тулсет
+      #   WindowsKernelModeDriver10.0) + Windows SDK 10.1.26100.7705.
+      # Скачивать ничего не нужно: все известные ссылки-установщики мертвы —
+      #   aka.ms/winsdk|wdk/10.0.22621.755 → 302 на bing.com (HTML вместо exe, отсюда
+      #   "corrupted and unreadable"), fwlink 2205489/2205490/2259814 → 302 на
+      #   рекламно-политические страницы. Просто детектируем предустановленный WDK
+      #   и передаём его версию в msbuild (vcxproj использует WindowsTargetPlatformVersion).
+      - name: Detect preinstalled WDK (km headers)
         shell: pwsh
         run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -Uri 'https://aka.ms/winsdk/10.0.22621.755/winsdksetup.exe' -OutFile "$env:RUNNER_TEMP\winsdksetup.exe"
-          $p = Start-Process -Wait -PassThru -FilePath "$env:RUNNER_TEMP\winsdksetup.exe" -ArgumentList '/q','/norestart'
-          Write-Host "SDK setup exit: $($p.ExitCode)"
-          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "Windows SDK silent install failed (exit $($p.ExitCode))" }
-
-      - name: Install WDK 10.0.22621.755
-        shell: pwsh
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -Uri 'https://aka.ms/wdk/10.0.22621.755/wdksetup.exe' -OutFile "$env:RUNNER_TEMP\wdksetup.exe"
-          $p = Start-Process -Wait -PassThru -FilePath "$env:RUNNER_TEMP\wdksetup.exe" -ArgumentList '/q','/norestart'
-          Write-Host "WDK setup exit: $($p.ExitCode)"
-          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "WDK silent install failed (exit $($p.ExitCode))" }
-
-      # Громкая проверка: без km-хедеров падаем сразу с внятным сообщением,
-      # а не с непонятным "ntddk.h: No such file".
-      - name: Verify WDK
-        shell: pwsh
-        run: |
-          $ntddk = "${env:ProgramFiles(x86)}\Windows Kits\10\Include\10.0.22621.0\km\ntddk.h"
-          if (-not (Test-Path $ntddk)) { throw "WDK 10.0.22621.0 km headers missing ($ntddk)" }
-          Write-Host "WDK 10.0.22621.0 OK"
+          $inc = "${env:ProgramFiles(x86)}\Windows Kits\10\Include"
+          $kits = Get-ChildItem $inc -Directory -ErrorAction SilentlyContinue |
+                  Where-Object { $_.Name -like '10.*' -and (Test-Path (Join-Path $_.FullName 'km\ntddk.h')) } |
+                  Sort-Object { [version]$_.Name } -Descending
+          if (-not $kits) {
+            Write-Host "Include folders found under $inc :"
+            Get-ChildItem $inc -Directory -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name)" }
+            throw "No WDK km headers found under $inc — expected preinstalled WDK on windows-2022 runner"
+          }
+          $kit = $kits[0]
+          Write-Host "Using Windows SDK/WDK: $($kit.Name)"
+          Add-Content -Path $env:GITHUB_ENV -Value "WTPV=$($kit.Name)"
 
       - name: Build driver (MSBuild)
         shell: pwsh
         run: |
           $msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
             -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
-          & $msbuild driver/phonemic.vcxproj /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=10.0.22621.0 /t:Build
+          Write-Host "WindowsTargetPlatformVersion = $env:WTPV"
+          & $msbuild driver/phonemic.vcxproj /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=$env:WTPV /t:Build
 
       - name: Package driver (sys/inf/cat)
         shell: pwsh

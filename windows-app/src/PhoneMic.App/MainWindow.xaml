@@ -15,8 +15,8 @@
                 <NavigationViewItem Content="Подключение" Tag="connect" Icon="People"/>
                 <NavigationViewItem Content="Транспорт" Tag="transport" Icon="Share"/>
                 <NavigationViewItem Content="Аудио" Tag="audio" Icon="Audio"/>
-                <NavigationViewItem Content="Безопасность" Tag="security" Icon="ProtectSettings"/>
-                <NavigationViewItem Content="Драйвер" Tag="driver" Icon="System"/>
+                <NavigationViewItem Content="Безопасность" Tag="security" Icon="Permissions"/>
+                <NavigationViewItem Content="Драйвер" Tag="driver" Icon="Manage"/>
                 <NavigationViewItem Content="Журнал" Tag="logs" Icon="Document"/>
             </NavigationView.MenuItems>
             <Frame x:Name="ContentFrame"/>

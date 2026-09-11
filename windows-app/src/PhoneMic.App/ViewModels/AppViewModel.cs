@@ -18,15 +18,25 @@ public partial class AppViewModel : ObservableObject
     [ObservableProperty] private string _transportKind = "—";
     [ObservableProperty] private string _codecInfo = "—";
     [ObservableProperty] private double _level;
-    [ObservableProperty] private int _rttMs;
-    [ObservableProperty] private double _lossPct;
-    [ObservableProperty] private int _bufferedMs;
-    [ObservableProperty] private long _underruns;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RttLabel))]
+    private int _rttMs;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LossLabel))]
+    private double _lossPct;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BufferLabel))]
+    private int _bufferedMs;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UnderrunsLabel))]
+    private long _underruns;
     [ObservableProperty] private bool _streamActive;
     [ObservableProperty] private bool _driverPresent;
     [ObservableProperty] private string _driverInfo = "Не найден";
     [ObservableProperty] private string _driverStateInfo = "";
-    [ObservableProperty] private double _volume = 1.0;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(VolumeLabel))]
+    private double _volume = 1.0;
     [ObservableProperty] private bool _mute;
     [ObservableProperty] private bool _active = true;
     [ObservableProperty] private bool _testSine;
@@ -150,6 +160,16 @@ public partial class AppViewModel : ObservableObject
     }
 
     public string WfdPassphrase => AppServices.Settings.WfdPassphrase;
+
+    // ---- вычисляемые строки для UI ----
+    // WinUI 3: x:Bind НЕ поддерживает StringFormat (это WPF-only), поэтому
+    // форматирование делается здесь; [NotifyPropertyChangedFor] выше гарантирует,
+    // что метки обновляются вместе с исходными значениями.
+    public string RttLabel => $"RTT: {RttMs} мс";
+    public string LossLabel => $"Потери: {LossPct} %";
+    public string BufferLabel => $"Буфер: {BufferedMs} мс";
+    public string UnderrunsLabel => $"Недоборы: {Underruns}";
+    public string VolumeLabel => Volume.ToString("P0");
 
     public void DisposeUi() { /* таймер живёт до выхода приложения */ }
 }

@@ -43,10 +43,10 @@
                     </Grid>
 
                     <StackPanel Orientation="Horizontal" Spacing="24">
-                        <TextBlock Text="{x:Bind Vm.RttMs, Mode=OneWay, StringFormat='RTT: {0} мс'}"/>
-                        <TextBlock Text="{x:Bind Vm.LossPct, Mode=OneWay, StringFormat='Потери: {0} %'}"/>
-                        <TextBlock Text="{x:Bind Vm.BufferedMs, Mode=OneWay, StringFormat='Буфер: {0} мс'}"/>
-                        <TextBlock Text="{x:Bind Vm.Underruns, Mode=OneWay, StringFormat='Недоборы: {0}'}"/>
+                        <TextBlock Text="{x:Bind Vm.RttLabel, Mode=OneWay}"/>
+                        <TextBlock Text="{x:Bind Vm.LossLabel, Mode=OneWay}"/>
+                        <TextBlock Text="{x:Bind Vm.BufferLabel, Mode=OneWay}"/>
+                        <TextBlock Text="{x:Bind Vm.UnderrunsLabel, Mode=OneWay}"/>
                     </StackPanel>
 
                     <StackPanel>
@@ -60,7 +60,7 @@
                             <Slider Grid.Column="1" Minimum="0" Maximum="1.5" StepFrequency="0.05"
                                     Value="{x:Bind Vm.Volume, Mode=TwoWay}"
                                     ValueChanged="Volume_ValueChanged"/>
-                            <TextBlock Grid.Column="2" Text="{x:Bind Vm.Volume, Mode=OneWay, StringFormat='{}{0:P0}'}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" Text="{x:Bind Vm.VolumeLabel, Mode=OneWay}" VerticalAlignment="Center"/>
                         </Grid>
                     </StackPanel>
 
